@@ -8,8 +8,9 @@ import multiprocessing
 import signal
 import psutil
 import threading
+import requests
 from PyQt5.QtWidgets import QApplication, QMessageBox
-from PyQt5.QtCore import QTimer, pyqtSignal, QObject
+from PyQt5.QtCore import QTimer, pyqtSignal, QObject, Qt
 
 # 버전 정보 가져오기
 from utils.version import get_version, get_version_string
@@ -81,6 +82,60 @@ def kill_all_threads():
             logger.info(f"스레드 종료 시도: {thread.name}")
             # 강제 종료는 불가, 데몬 스레드는 메인 종료 시 같이 종료됨
             pass
+
+GITHUB_REPO = "chuthulhu/school-timetable-widget"
+GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+class Updater:
+    def __init__(self, current_version):
+        self.current_version = current_version
+        self.latest_version = None
+        self.download_url = None
+        self.release_notes = None
+
+    def check_for_update(self):
+        try:
+            resp = requests.get(GITHUB_API_RELEASES, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.latest_version = data.get("tag_name")
+                self.release_notes = data.get("body", "")
+                for asset in data.get("assets", []):
+                    if asset["name"].endswith(".exe"):
+                        self.download_url = asset["browser_download_url"]
+                        break
+                if self.latest_version and self.download_url:
+                    return self.is_newer_version(self.latest_version, self.current_version)
+            else:
+                logger.warning(f"GitHub 릴리즈 정보 조회 실패: {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"업데이트 확인 중 오류: {e}")
+        return False
+
+    @staticmethod
+    def is_newer_version(latest, current):
+        import re
+        def parse(v):
+            return [int(x) for x in re.findall(r'\d+', v)]
+        return parse(latest) > parse(current)
+
+    def download_update(self, dest_path, progress_callback=None):
+        try:
+            with requests.get(self.download_url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                total = int(r.headers.get('content-length', 0))
+                with open(dest_path, 'wb') as f:
+                    downloaded = 0
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if progress_callback and total:
+                                progress_callback(downloaded, total)
+            return True
+        except Exception as e:
+            logger.error(f"업데이트 다운로드 실패: {e}")
+            return False
 
 class ApplicationManager:
     def __init__(self):
@@ -318,6 +373,33 @@ def main():
         sys.excepthook = handle_exception
         version_str = get_version_string()
         logger.info(f"학교시간표위젯 {version_str} 시작")
+
+        # 자동 업데이트 확인
+        updater = Updater(get_version())
+        if updater.check_for_update():
+            from PyQt5.QtWidgets import QMessageBox, QProgressDialog
+            app = QApplication.instance() or QApplication(sys.argv)
+            msg = f"새 버전({updater.latest_version})이 출시되었습니다!\n\n릴리즈 노트:\n{updater.release_notes}\n\n지금 다운로드하시겠습니까?"
+            reply = QMessageBox.question(None, "업데이트 알림", msg, QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                import tempfile
+                import os
+                dest = os.path.join(tempfile.gettempdir(), f"school_timetable_update_{updater.latest_version}.exe")
+                progress = QProgressDialog("업데이트 다운로드 중...", None, 0, 100)
+                progress.setWindowTitle("업데이트")
+                progress.setWindowModality(Qt.ApplicationModal)
+                def cb(done, total):
+                    progress.setValue(int(done/total*100))
+                ok = updater.download_update(dest, progress_callback=cb)
+                progress.close()
+                if ok:
+                    QMessageBox.information(None, "업데이트 완료", f"다운로드가 완료되었습니다.\n프로그램을 종료하면 새 버전이 실행됩니다.")
+                    # 종료 후 새 exe 실행
+                    import subprocess
+                    QTimer.singleShot(200, lambda: subprocess.Popen([dest]) or os._exit(0))
+                    return 0
+                else:
+                    QMessageBox.warning(None, "업데이트 실패", "업데이트 파일 다운로드에 실패했습니다.")
         app_manager = ApplicationManager()
         exit_code = app_manager.run()
         return exit_code

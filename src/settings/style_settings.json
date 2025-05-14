@@ -1,0 +1,14 @@
+{
+  "header_bg_color": "#6464C8",
+  "header_text_color": "#ffffff",
+  "cell_bg_color": "#000000",
+  "cell_text_color": "#ffffff",
+  "current_period_color": "#ffd700",
+  "border_color": "#ffffff",
+  "header_opacity": 102,
+  "cell_opacity": 51,
+  "current_period_opacity": 130,
+  "border_opacity": 7,
+  "font_family": "페이퍼로지 6 SemiBold",
+  "font_size": 11
+}

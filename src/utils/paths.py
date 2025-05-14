@@ -16,8 +16,9 @@ import shutil
 logger = logging.getLogger(__name__)
 
 # 애플리케이션 정보
-APP_NAME = "학교시간표위젯"
-APP_AUTHOR = "TimeTableDev"
+APP_DISPLAY_NAME = "학교시간표위젯" # UI 표시용 이름
+APP_NAME = "SchoolTimetableWidget" # 내부 식별자, 폴더명, 레지스트리 키 등에 사용될 영문 이름
+APP_AUTHOR = "TimeTableDev" # 개발자/회사 이름
 
 def resource_path(relative_path):
     """
@@ -49,7 +50,7 @@ def get_data_directory():
         return env_dir
     
     # 그렇지 않으면 OS에 적합한 디렉토리 사용
-    data_dir = appdirs.user_data_dir(APP_NAME, APP_AUTHOR)
+    data_dir = appdirs.user_data_dir(APP_NAME, APP_AUTHOR) # 내부 식별용 APP_NAME 사용
     logger.debug(f"OS 표준 데이터 디렉토리 사용: {data_dir}")
     
     # 디렉토리가 없으면 생성
@@ -61,7 +62,7 @@ def get_data_directory():
             logger.error(f"데이터 디렉토리 생성 실패: {e}")
             # 실패하면 임시 디렉토리 사용
             import tempfile
-            data_dir = os.path.join(tempfile.gettempdir(), APP_NAME)
+            data_dir = os.path.join(tempfile.gettempdir(), APP_NAME) # 내부 식별용 APP_NAME 사용
             os.makedirs(data_dir, exist_ok=True)
             logger.warning(f"임시 디렉토리로 대체: {data_dir}")
     
@@ -69,13 +70,13 @@ def get_data_directory():
 
 def get_config_directory():
     """애플리케이션 설정 저장 디렉토리 반환"""
-    config_dir = appdirs.user_config_dir(APP_NAME, APP_AUTHOR)
+    config_dir = appdirs.user_config_dir(APP_NAME, APP_AUTHOR) # 내부 식별용 APP_NAME 사용
     os.makedirs(config_dir, exist_ok=True)
     return config_dir
 
 def get_cache_directory():
     """애플리케이션 캐시 디렉토리 반환"""
-    cache_dir = appdirs.user_cache_dir(APP_NAME, APP_AUTHOR)
+    cache_dir = appdirs.user_cache_dir(APP_NAME, APP_AUTHOR) # 내부 식별용 APP_NAME 사용
     os.makedirs(cache_dir, exist_ok=True)
     return cache_dir
 

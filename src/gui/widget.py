@@ -93,14 +93,15 @@ class DragResizeMixin:
             self.save_widget_position()
 
 class Widget(DragResizeMixin, QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, settings_manager=None, notification_manager=None, app_manager=None, parent=None):
+        super().__init__(parent) # parent 인자 전달
         # 타이머 초기화 코드 추가
-        self.timer = QtCore.QTimer()
+        self.timer = QtCore.QTimer() # self.timer는 여기서 초기화하는 것이 적절
         
-        # 설정 관리자 및 알림 관리자 초기화 (싱글톤)
-        self.settings_manager = SettingsManager.get_instance()
-        self.notification_manager = NotificationManager.get_instance()
+        # 전달된 매니저 인스턴스 사용, 없으면 새로 생성 (main.py에서 전달하므로 settings_manager 등은 None이 아닐 것임)
+        self.settings_manager = settings_manager if settings_manager else SettingsManager.get_instance()
+        self.notification_manager = notification_manager if notification_manager else NotificationManager.get_instance()
+        self.app_manager = app_manager # app_manager는 main.py에서 self를 전달
         
         # 프레임 없는 창으로 설정
         self.setWindowFlags(
@@ -232,11 +233,32 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
             target_screen = QtWidgets.QApplication.primaryScreen()
 
         screen_geom = target_screen.geometry()
-        x = max(screen_geom.left(), min(pos["x"], screen_geom.right() - 100))
-        y = max(screen_geom.top(), min(pos["y"], screen_geom.bottom() - 100))
+        
+        # 위젯이 화면 경계를 벗어나지 않도록 위치 조정
+        # 위젯의 너비와 높이를 고려
+        widget_width = size.get("width", self.width()) # 저장된 크기가 없다면 현재 크기 사용
+        widget_height = size.get("height", self.height())
 
-        self.move(x, y)
-        self.resize(size["width"], size["height"])
+        # x 좌표 조정
+        min_x = screen_geom.left()
+        max_x = screen_geom.right() - widget_width
+        # max_x가 min_x보다 작아지는 경우 (화면보다 위젯이 넓은 경우), x는 min_x로 설정
+        if max_x < min_x:
+            max_x = min_x
+        
+        final_x = max(min_x, min(pos.get("x", screen_geom.left()), max_x))
+
+        # y 좌표 조정
+        min_y = screen_geom.top()
+        max_y = screen_geom.bottom() - widget_height
+        # max_y가 min_y보다 작아지는 경우 (화면보다 위젯이 높은 경우), y는 min_y로 설정
+        if max_y < min_y:
+            max_y = min_y
+            
+        final_y = max(min_y, min(pos.get("y", screen_geom.top()), max_y))
+
+        self.move(final_x, final_y)
+        self.resize(widget_width, widget_height)
 
     def save_widget_position(self):
         """
@@ -246,13 +268,26 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         pos = self.pos()
         size = self.size()
         # 현재 위젯이 속한 스크린 정보 저장
-        screen = QtWidgets.QApplication.screenAt(self.mapToGlobal(self.rect().center()))
+        current_global_pos = self.mapToGlobal(self.rect().center())
+        screen = QtWidgets.QApplication.screenAt(current_global_pos)
+        
         if screen is None:
+            logger.warning(f"위젯 중심점({current_global_pos})에 해당하는 스크린을 찾지 못했습니다. Primary screen으로 대체합니다.")
             screen = QtWidgets.QApplication.primaryScreen()
-        screen_info = {
-            'geometry': screen.geometry().getRect(),  # (x, y, w, h)
-            'name': screen.name()
-        }
+            if screen is None: # Primary screen 마저 없는 극단적인 경우 (이론상 발생하기 어려움)
+                logger.error("Primary screen도 찾을 수 없습니다. screen_info를 None으로 설정합니다.")
+                screen_info = None
+            else:
+                screen_info = {
+                    'geometry': screen.geometry().getRect(),
+                    'name': screen.name()
+                }
+        else:
+            screen_info = {
+                'geometry': screen.geometry().getRect(),  # (x, y, w, h)
+                'name': screen.name()
+            }
+        logger.debug(f"Saving widget position. Screen info: {screen_info}, Widget pos: {pos}, Widget size: {size}")
         self.settings_manager.save_widget_position(pos.x(), pos.y(), size.width(), size.height(), screen_info)
     
     def update_styles(self):
@@ -500,30 +535,42 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
     def show_settings_dialog(self):
         """설정 대화상자 표시"""
         dialog = SettingsDialog(self)
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            self.update_styles()
+        # SettingsDialog의 settings_applied 시그널을 Widget의 update_styles 메서드에 연결
+        dialog.settings_applied.connect(self.update_styles)
+        
+        # dialog.exec_()는 사용자가 대화상자를 닫을 때까지 블로킹합니다.
+        # "확인" 또는 "적용" 후 "취소"가 아닌 방식으로 닫히면 Accepted 반환.
+        # "적용" 버튼을 누르면 apply_settings가 호출되고 settings_applied 시그널이 발생하여
+        # update_styles가 즉시 호출됩니다.
+        # "확인" 버튼을 누르면 accept()가 호출되고, accept() 내부에서 apply_settings가 호출되어
+        # settings_applied 시그널이 발생하여 update_styles가 호출됩니다.
+        # 따라서 dialog.exec_() 이후에 별도로 self.update_styles()를 호출할 필요는 없습니다.
+        dialog.exec_()
+        # if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            # self.update_styles() # 시그널로 처리되므로 이 부분은 필요 없음
     
     def closeEvent(self, event):
         """위젯 종료 시 호출되는 이벤트"""
         logger.info("위젯 종료 이벤트 발생")
-        if self.cleanup_on_close:
-            logger.info("종료 시 리소스 정리 함수 호출")
-            try:
+        try:
+            if self.cleanup_on_close:
+                logger.info("종료 시 리소스 정리 함수 호출")
                 self.cleanup_on_close()  # 정리 함수 호출
-                # 정리 후 강제 종료
-                logger.info("위젯 종료 후 프로그램 강제 종료")
-                os._exit(0)
-            except Exception as e:
-                logger.error(f"정리 함수 호출 중 오류: {e}")
-                os._exit(1)  # 오류 발생 시 강제 종료
-        else:
-            logger.warning("등록된 종료 정리 함수 없음")
-            # 정리 함수가 없어도 강제 종료
-            os._exit(0)
-        
-        # 기본 closeEvent 처리 계속 진행 (실제로는 이 코드까지 실행되지 않음)
-        logger.info("위젯 종료 계속 진행")
-        super().closeEvent(event)
+            else:
+                logger.warning("등록된 종료 정리 함수 없음")
+            
+            logger.info("애플리케이션 종료 요청")
+            QtWidgets.QApplication.instance().quit() # 표준 종료 요청
+            event.accept() # 이벤트 수락 (위젯 닫힘 허용)
+            
+        except Exception as e:
+            logger.error(f"종료 처리 중 오류: {e}")
+            # 오류 발생 시에도 일단 종료 시도는 하되, 이벤트를 무시하여
+            # 애플리케이션이 즉시 꺼지지 않도록 할 수도 있습니다.
+            # 하지만 여기서는 일단 accept()로 통일합니다.
+            QtWidgets.QApplication.instance().quit()
+            event.accept()
+        # super().closeEvent(event) # event.accept() 또는 event.ignore()로 대체됨
 
     # 호버 이벤트 처리 메서드 추가
     def on_label_hover_enter(self, event, label):

@@ -1,7 +1,10 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5.QtCore import pyqtSignal # pyqtSignal 임포트
 
 class ColorButton(QtWidgets.QPushButton):
     """색상 선택 버튼 클래스"""
+    colorChanged = pyqtSignal(str) # 색상 변경 시그널
+
     def __init__(self, color, parent=None):
         super().__init__(parent)
         self.color = color
@@ -37,11 +40,12 @@ class ColorButton(QtWidgets.QPushButton):
         if color_dialog.exec_() == QtWidgets.QDialog.Accepted:
             color = color_dialog.currentColor()
             if color.isValid():
-                self.color = color.name(QtGui.QColor.HexRgb)
+                self.color = color.name(QtGui.QColor.HexRgb) # #RRGGBB 형식으로 저장
                 self.updateStyleSheet()
-                # 부모 위젯에 변경 알림
-                if hasattr(self.parent(), 'apply_settings'):
-                    self.parent().apply_settings()
+                self.colorChanged.emit(self.color) # 색상 변경 시그널 발생
+                # # 부모 위젯에 변경 알림 (시그널 방식으로 대체)
+                # if hasattr(self.parent(), 'apply_settings'):
+                #     self.parent().apply_settings()
 
 
 class FontComboBox(QtWidgets.QFontComboBox):

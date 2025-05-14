@@ -1,4 +1,6 @@
+import os # os 모듈 임포트 추가
 from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5.QtCore import pyqtSignal # pyqtSignal 임포트 추가
 from ..components.color_button import ColorButton, FontComboBox
 from ..components.theme_selector import ThemeSelector
 import logging
@@ -7,14 +9,46 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SettingsDialog(QtWidgets.QDialog):
+    settings_applied = pyqtSignal() # 설정 적용 시그널 정의
+
+    # style_preview_requested = pyqtSignal() # 미리보기 요청 시그널 (settings_applied와 구분 시)
+
     def __init__(self, parent=None):
         super().__init__(parent, QtCore.Qt.WindowStaysOnTopHint)
         self.parent = parent
         self.settings_manager = parent.settings_manager
         self.setWindowTitle("설정")
         self.setStyleSheet("background-color: white;")  # 배경색을 흰색으로 고정
+        
+        # 초기 설정값 백업 (취소 시 복원용)
+        self._backup_initial_settings()
+        
         self.setup_ui()
     
+    def _backup_initial_settings(self):
+        """대화상자 시작 시 현재 설정을 백업합니다."""
+        sm = self.settings_manager
+        self.initial_settings = {
+            "header_bg_color": sm.header_bg_color,
+            "header_text_color": sm.header_text_color,
+            "cell_bg_color": sm.cell_bg_color,
+            "cell_text_color": sm.cell_text_color,
+            "current_period_color": sm.current_period_color,
+            "border_color": sm.border_color,
+            "header_opacity": sm.header_opacity,
+            "cell_opacity": sm.cell_opacity,
+            "current_period_opacity": sm.current_period_opacity,
+            "border_opacity": sm.border_opacity,
+            "header_font_family": sm.header_font_family,
+            "header_font_size": sm.header_font_size,
+            "cell_font_family": sm.cell_font_family,
+            "cell_font_size": sm.cell_font_size,
+            "theme": sm.theme,
+            # 알림 설정은 NotificationManager에서 직접 관리하므로 여기서는 백업/복원하지 않음.
+            # 위젯 크기/위치, 자동 시작 등도 각 탭에서 직접 관리하거나,
+            # apply_settings에서 최종 저장되므로, 스타일 관련만 우선 처리.
+        }
+
     def setup_ui(self):
         layout = QtWidgets.QVBoxLayout()
         
@@ -93,23 +127,29 @@ class SettingsDialog(QtWidgets.QDialog):
         color_group = QtWidgets.QGroupBox("색상 설정")
         color_form_layout = QtWidgets.QFormLayout()
         
-        # 모든 색상 버튼 설정
+        # 모든 색상 버튼 설정 및 시그널 연결
         self.header_bg_btn = ColorButton(self.settings_manager.header_bg_color, self)
+        self.header_bg_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("헤더 배경색:", self.header_bg_btn)
         
         self.header_text_btn = ColorButton(self.settings_manager.header_text_color, self)
+        self.header_text_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("헤더 텍스트색:", self.header_text_btn)
         
         self.cell_bg_btn = ColorButton(self.settings_manager.cell_bg_color, self)
+        self.cell_bg_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("셀 배경색:", self.cell_bg_btn)
         
         self.cell_text_btn = ColorButton(self.settings_manager.cell_text_color, self)
+        self.cell_text_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("셀 텍스트색:", self.cell_text_btn)
         
         self.current_period_btn = ColorButton(self.settings_manager.current_period_color, self)
+        self.current_period_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("현재 교시 강조색:", self.current_period_btn)
         
         self.border_btn = ColorButton(self.settings_manager.border_color, self)
+        self.border_btn.colorChanged.connect(self._preview_style_update)
         color_form_layout.addRow("테두리색:", self.border_btn)
         
         color_group.setLayout(color_form_layout)
@@ -136,17 +176,21 @@ class SettingsDialog(QtWidgets.QDialog):
             
             return slider_layout, slider
         
-        # 각 투명도 슬라이더 생성
-        header_slider_layout, self.header_opacity = create_opacity_slider_with_label(self.settings_manager.header_opacity)
+        # 각 투명도 슬라이더 생성 및 시그널 연결
+        header_slider_layout, self.header_opacity_slider = create_opacity_slider_with_label(self.settings_manager.header_opacity)
+        self.header_opacity_slider.valueChanged.connect(self._preview_style_update)
         opacity_layout.addRow("헤더 투명도:", header_slider_layout)
         
-        cell_slider_layout, self.cell_opacity = create_opacity_slider_with_label(self.settings_manager.cell_opacity)
+        cell_slider_layout, self.cell_opacity_slider = create_opacity_slider_with_label(self.settings_manager.cell_opacity)
+        self.cell_opacity_slider.valueChanged.connect(self._preview_style_update)
         opacity_layout.addRow("셀 투명도:", cell_slider_layout)
         
-        current_period_slider_layout, self.current_period_opacity = create_opacity_slider_with_label(self.settings_manager.current_period_opacity)
+        current_period_slider_layout, self.current_period_opacity_slider = create_opacity_slider_with_label(self.settings_manager.current_period_opacity)
+        self.current_period_opacity_slider.valueChanged.connect(self._preview_style_update)
         opacity_layout.addRow("현재 교시 투명도:", current_period_slider_layout)
         
-        border_slider_layout, self.border_opacity = create_opacity_slider_with_label(self.settings_manager.border_opacity)
+        border_slider_layout, self.border_opacity_slider = create_opacity_slider_with_label(self.settings_manager.border_opacity)
+        self.border_opacity_slider.valueChanged.connect(self._preview_style_update)
         opacity_layout.addRow("테두리 투명도:", border_slider_layout)
         
         opacity_group.setLayout(opacity_layout)
@@ -216,11 +260,11 @@ class SettingsDialog(QtWidgets.QDialog):
         preview_group.setLayout(preview_layout)
         font_layout.addWidget(preview_group)
         
-        # 폰트 변경 시 미리보기 업데이트
-        self.header_font_combo.currentFontChanged.connect(self.update_font_preview)
-        self.header_font_size.valueChanged.connect(self.update_font_preview)
-        self.cell_font_combo.currentFontChanged.connect(self.update_font_preview)
-        self.cell_font_size.valueChanged.connect(self.update_font_preview)
+        # 폰트 변경 시 미리보기 업데이트 및 스타일 프리뷰 요청
+        self.header_font_combo.currentFontChanged.connect(self._on_font_preview_settings_changed)
+        self.header_font_size.valueChanged.connect(self._on_font_preview_settings_changed)
+        self.cell_font_combo.currentFontChanged.connect(self._on_font_preview_settings_changed)
+        self.cell_font_size.valueChanged.connect(self._on_font_preview_settings_changed)
         
         # 기존 폰트 설정 (호환성 유지)
         self.font_combo = self.header_font_combo
@@ -430,10 +474,14 @@ class SettingsDialog(QtWidgets.QDialog):
         self.border_btn.updateStyleSheet()
         
         # 투명도 슬라이더 업데이트
-        self.header_opacity.setValue(int(self.settings_manager.header_opacity * 100 / 255))
-        self.cell_opacity.setValue(int(self.settings_manager.cell_opacity * 100 / 255))
-        self.current_period_opacity.setValue(int(self.settings_manager.current_period_opacity * 100 / 255))
-        self.border_opacity.setValue(int(self.settings_manager.border_opacity * 100 / 255))
+        if hasattr(self, 'header_opacity_slider'): # 객체 존재 확인
+            self.header_opacity_slider.setValue(int(self.settings_manager.header_opacity * 100 / 255))
+        if hasattr(self, 'cell_opacity_slider'):
+            self.cell_opacity_slider.setValue(int(self.settings_manager.cell_opacity * 100 / 255))
+        if hasattr(self, 'current_period_opacity_slider'):
+            self.current_period_opacity_slider.setValue(int(self.settings_manager.current_period_opacity * 100 / 255))
+        if hasattr(self, 'border_opacity_slider'):
+            self.border_opacity_slider.setValue(int(self.settings_manager.border_opacity * 100 / 255))
         
         # 폰트 설정 업데이트
         if hasattr(self, 'header_font_combo') and hasattr(self, 'cell_font_combo'):
@@ -452,6 +500,53 @@ class SettingsDialog(QtWidgets.QDialog):
         if hasattr(self, 'auto_start_checkbox'):
             auto_start_enabled = getattr(self.settings_manager, 'auto_start_enabled', False)
             self.auto_start_checkbox.setChecked(auto_start_enabled)
+
+    def _on_font_preview_settings_changed(self):
+        """폰트 관련 UI 변경 시 호출되어 미리보기 업데이트 및 스타일 프리뷰 요청"""
+        self.update_font_preview() # UI상의 미리보기 업데이트
+        self._preview_style_update() # 실제 위젯 스타일 프리뷰 요청
+
+    def _preview_style_update(self):
+        """UI 컨트롤 값 변경 시 호출되어 SettingsManager에 임시 적용하고 시그널 발생"""
+        # 현재 UI 컨트롤에서 값 읽어서 SettingsManager에 즉시 반영
+        # 색상
+        self.settings_manager.header_bg_color = self.header_bg_btn.color
+        self.settings_manager.header_text_color = self.header_text_btn.color
+        self.settings_manager.cell_bg_color = self.cell_bg_btn.color
+        self.settings_manager.cell_text_color = self.cell_text_btn.color
+        self.settings_manager.current_period_color = self.current_period_btn.color
+        self.settings_manager.border_color = self.border_btn.color
+        # 투명도
+        self.settings_manager.header_opacity = int(self.header_opacity_slider.value() * 255 / 100)
+        self.settings_manager.cell_opacity = int(self.cell_opacity_slider.value() * 255 / 100)
+        self.settings_manager.current_period_opacity = int(self.current_period_opacity_slider.value() * 255 / 100)
+        self.settings_manager.border_opacity = int(self.border_opacity_slider.value() * 255 / 100)
+        # 폰트
+        if hasattr(self, 'header_font_combo') and hasattr(self, 'cell_font_combo'):
+            self.settings_manager.header_font_family = self.header_font_combo.currentFont().family()
+            self.settings_manager.header_font_size = self.header_font_size.value()
+            self.settings_manager.cell_font_family = self.cell_font_combo.currentFont().family()
+            self.settings_manager.cell_font_size = self.cell_font_size.value()
+            # 호환성
+            self.settings_manager.font_family = self.settings_manager.header_font_family
+            self.settings_manager.font_size = self.settings_manager.header_font_size
+        
+        # 테마가 '사용자 정의'가 아니었는데 스타일이 변경되면 '사용자 정의'로 변경 시도
+        if self.settings_manager.theme != "사용자 정의":
+            # 이 부분은 ThemeSelector와 연동하여 더 정교하게 처리 필요.
+            # 간단하게는, 스타일 변경 시 settings_manager.theme을 "사용자 정의"로 설정하고,
+            # ThemeSelector의 UI도 업데이트 하도록 할 수 있음.
+            # self.settings_manager.theme = "사용자 정의"
+            if hasattr(self, 'theme_selector'):
+                 # theme_selector가 현재 스타일이 특정 테마와 다른지 감지하고
+                 # 스스로 '사용자 정의'로 변경하거나, 여기서 강제로 설정할 수 있음.
+                 # 여기서는 일단 ThemeSelector의 내부 로직에 맡기거나,
+                 # 명시적으로 self.theme_selector.set_current_theme("사용자 정의")를 호출할 수 있습니다.
+                 # 지금은 _preview_style_update가 호출되면 테마가 변경될 수 있음을 인지.
+                 pass
+
+
+        self.settings_applied.emit() # Widget에 스타일 업데이트 요청
         
     def update_font_preview(self):
         """폰트 미리보기 업데이트"""
@@ -468,37 +563,12 @@ class SettingsDialog(QtWidgets.QDialog):
             self.cell_font_preview.setFont(cell_font)
         
     def apply_settings(self):
-        """현재 설정을 SettingsManager에 적용"""
-        # 색상 설정 적용
-        self.settings_manager.header_bg_color = self.header_bg_btn.color
-        self.settings_manager.header_text_color = self.header_text_btn.color
-        self.settings_manager.cell_bg_color = self.cell_bg_btn.color
-        self.settings_manager.cell_text_color = self.cell_text_btn.color
-        self.settings_manager.current_period_color = self.current_period_btn.color
-        self.settings_manager.border_color = self.border_btn.color
-        
-        # 투명도 설정 적용 (0-100% -> 0-255)
-        self.settings_manager.header_opacity = int(self.header_opacity.value() * 255 / 100)
-        self.settings_manager.cell_opacity = int(self.cell_opacity.value() * 255 / 100)
-        self.settings_manager.current_period_opacity = int(self.current_period_opacity.value() * 255 / 100)
-        self.settings_manager.border_opacity = int(self.border_opacity.value() * 255 / 100)
-        # 폰트 설정 적용
-        if hasattr(self, 'header_font_combo') and hasattr(self, 'cell_font_combo'):
-            # 개별 폰트 설정 저장
-            self.settings_manager.header_font_family = self.header_font_combo.currentFont().family()
-            self.settings_manager.header_font_size = self.header_font_size.value()
-            self.settings_manager.cell_font_family = self.cell_font_combo.currentFont().family()
-            self.settings_manager.cell_font_size = self.cell_font_size.value()
-            
-            # 기존 폰트 설정도 호환성을 위해 헤더 폰트로 유지
-            self.settings_manager.font_family = self.header_font_combo.currentFont().family()
-            self.settings_manager.font_size = self.header_font_size.value()
-        else:
-            # 기존 단일 폰트 설정 적용
-            self.settings_manager.font_family = self.font_combo.currentFont().family()
-            self.settings_manager.font_size = self.font_size.value()
-        
-        # 알림 설정 적용
+        """현재 SettingsManager에 반영된 설정들을 파일에 저장하고, 기타 설정 적용"""
+        # 스타일 관련 설정은 _preview_style_update에서 이미 SettingsManager 객체에 반영됨.
+        # 여기서는 해당 내용을 파일에 저장하는 역할.
+        self.settings_manager.save_style_settings()
+
+        # 알림 설정 적용 및 저장 (NotificationManager는 자체 저장 로직 사용)
         notification_manager = self.parent.notification_manager
         notification_manager.set_notification_enabled(self.notification_enabled.isChecked())
         notification_manager.set_next_period_warning(self.next_period_warning.isChecked())
@@ -524,12 +594,42 @@ class SettingsDialog(QtWidgets.QDialog):
                     self.settings_manager.set_position_lock(is_locked)
                 
                 # 위젯 위치와 크기 정보 저장
-                x = old_position.get('x', 100)
-                y = old_position.get('y', 100)
-                self.settings_manager.save_widget_position(x, y, new_size['width'], new_size['height'])
+                # x, y 좌표는 settings_manager에 저장된 현재 값을 사용 (SettingsDialog에서 직접 위치를 바꾸는 UI는 없음)
+                # 크기는 현재 UI에서 설정된 new_size 사용
+                # screen_info는 현재 메인 위젯의 실제 화면 정보를 가져와서 전달
+                
+                current_widget_x = self.settings_manager.widget_position.get('x', 100)
+                current_widget_y = self.settings_manager.widget_position.get('y', 100)
+
+                # 현재 메인 위젯(self.parent)의 screen_info 가져오기
+                screen_info_to_save = None
+                if self.parent: # self.parent (메인 위젯)가 존재하는지 확인
+                    widget_center_global = self.parent.mapToGlobal(self.parent.rect().center())
+                    current_screen = QtWidgets.QApplication.screenAt(widget_center_global)
+                    if current_screen is None:
+                        logger.warning("SettingsDialog: 메인 위젯의 현재 스크린을 찾지 못해 primaryScreen 사용.")
+                        current_screen = QtWidgets.QApplication.primaryScreen()
+                    
+                    if current_screen:
+                        screen_info_to_save = {
+                            'geometry': current_screen.geometry().getRect(),
+                            'name': current_screen.name()
+                        }
+                    else:
+                        logger.error("SettingsDialog: Primary screen도 찾을 수 없어 screen_info를 None으로 설정.")
+                else:
+                    logger.warning("SettingsDialog: self.parent (메인 위젯)가 없어 screen_info를 가져올 수 없습니다.")
+
+                self.settings_manager.save_widget_position(
+                    current_widget_x,
+                    current_widget_y,
+                    new_size['width'],
+                    new_size['height'],
+                    screen_info_to_save # 수정된 screen_info 전달
+                )
                 
                 # 부모 위젯 크기 업데이트 (값이 변경된 경우만)
-                if (old_size.get('width') != new_size['width'] or 
+                if (old_size.get('width') != new_size['width'] or
                     old_size.get('height') != new_size['height']):
                     logger.info(f"위젯 크기 변경: {old_size} -> {new_size}")
                     self.parent.resize(new_size['width'], new_size['height'])
@@ -539,21 +639,80 @@ class SettingsDialog(QtWidgets.QDialog):
         # 부팅시 자동실행 적용
         if hasattr(self, 'auto_start_checkbox'):
             auto_start_enabled = self.auto_start_checkbox.isChecked()
-            self.settings_manager.auto_start_enabled = auto_start_enabled
-            from utils.auto_start import enable_auto_start, disable_auto_start
+            # self.settings_manager.auto_start_enabled = auto_start_enabled # set_auto_start 내부에서 처리
+            
+            # 자동 시작 기능 연동
+            from utils.auto_start import enable_auto_start, disable_auto_start, get_executable_path
+            from utils.paths import resource_path, APP_NAME as DEFAULT_APP_NAME # APP_NAME 임포트
+            
+            app_name = DEFAULT_APP_NAME # 또는 설정에서 관리하는 앱 이름
+            executable_path = get_executable_path()
+            icon_path = resource_path("assets/app_icon.ico")
+            if not os.path.exists(icon_path): # os 임포트 필요
+                icon_path = resource_path("assets/icon.ico")
+            if not os.path.exists(icon_path):
+                 icon_path = executable_path # 최후의 수단으로 실행 파일 아이콘
+
             if auto_start_enabled:
-                enable_auto_start(method="shortcut")
-            else:
-                disable_auto_start(method="shortcut")
+                # 먼저 설정 매니저를 통해 값을 변경하고 저장 시도
+                self.settings_manager.set_auto_start(True)
+                if not enable_auto_start(app_name_for_shortcut=app_name,
+                                     target_path=executable_path,
+                                     icon_location=icon_path):
+                    logger.error("자동 시작 활성화 실패.")
+                    # 사용자에게 알림을 줄 수도 있음
+                    QtWidgets.QMessageBox.warning(self, "오류", "자동 시작을 활성화하지 못했습니다.\n관리자 권한이 필요하거나, pywin32 라이브러리가 설치되지 않았을 수 있습니다.")
+                    self.auto_start_checkbox.setChecked(False) # UI 동기화
+                    self.settings_manager.set_auto_start(False) # 설정도 동기화 및 저장
+            else: # auto_start_enabled is False (체크 해제 시)
+                # 먼저 설정 매니저를 통해 값을 변경하고 저장 시도
+                self.settings_manager.set_auto_start(False)
+                if not disable_auto_start(app_name_for_shortcut=app_name):
+                    logger.error("자동 시작 비활성화 실패.")
+                    # 사용자에게 알림을 줄 수도 있음
+                    QtWidgets.QMessageBox.warning(self, "오류", "자동 시작을 비활성화하지 못했습니다.")
+                    # 실패 시 UI나 설정을 되돌릴 필요는 없을 수 있음 (이미 비활성화 시도)
         
-        # 설정 파일에 저장
-        self.settings_manager.save_style_settings()
+        # 설정 파일에 저장 (set_auto_start 내부에서 widget_settings.json 저장, 다른 스타일은 여기서 저장)
+        self.settings_manager.save_style_settings() # 스타일 관련 설정만 저장
         
-        # 부모 위젯 스타일 갱신
-        self.parent.update_styles()
+        # 부모 위젯 스타일 갱신 (시그널로 대체 가능)
+        # self.parent.update_styles() # 이 부분은 시그널로 처리되므로 주석 처리하거나 삭제 가능
+        
+        self.settings_applied.emit() # 설정 적용 완료 시그널 발생 (UI 업데이트 트리거)
     
+    def reject(self):
+        """취소 버튼 클릭 시 초기 설정으로 복원하고 대화상자 닫기"""
+        sm = self.settings_manager
+        initial = self.initial_settings
+
+        # 백업된 설정으로 SettingsManager 복원
+        sm.header_bg_color = initial["header_bg_color"]
+        sm.header_text_color = initial["header_text_color"]
+        sm.cell_bg_color = initial["cell_bg_color"]
+        sm.cell_text_color = initial["cell_text_color"]
+        sm.current_period_color = initial["current_period_color"]
+        sm.border_color = initial["border_color"]
+        sm.header_opacity = initial["header_opacity"]
+        sm.cell_opacity = initial["cell_opacity"]
+        sm.current_period_opacity = initial["current_period_opacity"]
+        sm.border_opacity = initial["border_opacity"]
+        sm.header_font_family = initial["header_font_family"]
+        sm.header_font_size = initial["header_font_size"]
+        sm.cell_font_family = initial["cell_font_family"]
+        sm.cell_font_size = initial["cell_font_size"]
+        sm.theme = initial["theme"] # 테마도 복원
+        
+        # UI 컨트롤들도 복원된 값으로 업데이트
+        self.update_controls_from_settings()
+        
+        # Widget 스타일도 원래대로 복원하도록 시그널 발생
+        self.settings_applied.emit()
+        
+        super().reject()
+
     def accept(self):
         """확인 버튼 클릭 시 설정을 적용하고 대화상자 닫기"""
-        self.apply_settings()
+        self.apply_settings() # 현재 SettingsManager에 있는 값들을 파일에 저장
         super().accept()
 

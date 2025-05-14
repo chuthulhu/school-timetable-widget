@@ -39,16 +39,20 @@ except ImportError:
 
 # 로거 설정
 def setup_logging():
-    log_dir = os.path.join(ensure_data_directory_exists(), "logs")
-    os.makedirs(log_dir, exist_ok=True)
+    from utils.paths import get_log_directory, APP_NAME # APP_NAME은 파일명에 사용될 수 있음
     
-    log_file = os.path.join(log_dir, "application.log")
+    log_dir_path = get_log_directory() # utils.paths에서 로그 디렉토리 경로 가져오기
+    # os.makedirs는 get_log_directory 내부에서 처리됨
+    
+    # 로그 파일명 (예: SchoolTimetableWidget.log)
+    log_file_name = f"{APP_NAME}.log"
+    log_file_path = os.path.join(log_dir_path, log_file_name)
     
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.FileHandler(log_file_path, encoding='utf-8'),
             logging.StreamHandler()
         ]
     )
@@ -258,11 +262,11 @@ class ApplicationManager:
             except Exception as e:
                 logger.error(f"추가 프로세스 정리 중 오류: {str(e)}")
         
-        # 관련 파이썬 프로세스 강제 종료 (최후의 수단)
-        try:
-            self.force_kill_python_processes()
-        except Exception as e:
-            logger.error(f"파이썬 프로세스 강제 종료 중 오류: {str(e)}")
+        # 관련 파이썬 프로세스 강제 종료 (최후의 수단) - 현재 비활성화 (위험성 때문)
+        # try:
+        #     self.force_kill_python_processes()
+        # except Exception as e:
+        #     logger.error(f"파이썬 프로세스 강제 종료 중 오류: {str(e)}")
         
         # 메모리 정리 시도
         try:
@@ -331,9 +335,16 @@ class ApplicationManager:
             self.app.setQuitOnLastWindowClosed(False)
             self.app.setApplicationName("학교 시간표 위젯")
             self.app.aboutToQuit.connect(self.cleanup_resources)
-            settings_manager = SettingsManager.get_instance()
-            notification_manager = NotificationManager.get_instance()
-            self.widget = Widget()
+            self.settings_manager = SettingsManager.get_instance() # self.settings_manager로 할당
+            self.notification_manager = NotificationManager.get_instance() # self.notification_manager로 할당
+            
+            # 애플리케이션 시작 시 자동 시작 설정 동기화
+            self._sync_auto_start_setting()
+
+            # Widget 생성 시 필요한 인스턴스 전달
+            self.widget = Widget(settings_manager=self.settings_manager,
+                                 notification_manager=self.notification_manager,
+                                 app_manager=self)
             self.widget.cleanup_on_close = self.cleanup_resources
             self.widget.show()
             self.tray_icon = TrayIcon(self.widget)
@@ -361,7 +372,65 @@ class ApplicationManager:
             self.tray_icon.hide()
         self.cleanup_resources()
         logger.info("애플리케이션 정상 종료")
-        QTimer.singleShot(200, lambda: os._exit(0))
+        # QTimer.singleShot(200, lambda: os._exit(0)) # os._exit() 대신 QApplication.quit() 사용
+        if QApplication.instance():
+            QApplication.instance().quit()
+
+    def _sync_auto_start_setting(self):
+        """애플리케이션 시작 시 자동 시작 설정을 시스템 상태와 동기화합니다."""
+        try:
+            # platform 모듈은 파일 상단에 이미 임포트되어 있다고 가정
+            # import platform
+            import platform # 명시적으로 다시 임포트 (안전하게)
+            from utils.auto_start import is_auto_start_enabled, enable_auto_start, disable_auto_start, get_executable_path
+            from utils.paths import resource_path, APP_NAME
+            # os 모듈은 파일 상단에 이미 임포트되어 있음
+
+            if platform.system() != "Windows": # Windows 외에는 자동 시작 미지원
+                logger.debug("Windows가 아닌 OS에서는 자동 시작 동기화를 건너<0xEB><0><0x8A><0x8D>니다.")
+                return
+
+            app_name_for_shortcut = APP_NAME
+            # SettingsManager 인스턴스가 self.settings_manager에 할당되어 있어야 함
+            if not hasattr(self, 'settings_manager') or self.settings_manager is None:
+                logger.error("SettingsManager가 초기화되지 않아 자동 시작 설정을 동기화할 수 없습니다.")
+                return
+
+            current_setting_enabled = getattr(self.settings_manager, 'auto_start_enabled', False)
+            system_is_enabled = is_auto_start_enabled(app_name_for_shortcut=app_name_for_shortcut)
+
+            executable_path = get_executable_path()
+            icon_path = resource_path("assets/app_icon.ico")
+            if not os.path.exists(icon_path):
+                icon_path = resource_path("assets/icon.ico")
+            if not os.path.exists(icon_path): # 아이콘 파일이 아예 없는 경우
+                icon_path = executable_path # 실행 파일 자체 아이콘 사용
+
+
+            if current_setting_enabled != system_is_enabled:
+                logger.info(f"자동 시작 설정 동기화 필요: 설정({current_setting_enabled}), 시스템({system_is_enabled})")
+                if current_setting_enabled:
+                    if enable_auto_start(app_name_for_shortcut=app_name_for_shortcut,
+                                         target_path=executable_path,
+                                         icon_location=icon_path):
+                        logger.info("시스템 자동 시작 활성화됨 (설정 동기화).")
+                    else:
+                        logger.error("시스템 자동 시작 활성화 실패 (설정 동기화).")
+                        # 설정값을 시스템 상태에 맞게 변경 (False로) 및 저장
+                        self.settings_manager.set_auto_start(False)
+                else: # current_setting_enabled is False, system_is_enabled is True
+                    if disable_auto_start(app_name_for_shortcut=app_name_for_shortcut):
+                        logger.info("시스템 자동 시작 비활성화됨 (설정 동기화).")
+                        # 설정은 이미 False이므로 set_auto_start(False)를 다시 호출할 필요는 없음
+                        # (set_auto_start 내부에서 값이 같으면 저장 안 함)
+                    else:
+                        logger.error("시스템 자동 시작 비활성화 실패 (설정 동기화).")
+            else:
+                logger.debug(f"자동 시작 설정과 시스템 상태 일치: {current_setting_enabled}")
+        except ImportError as e:
+            logger.warning(f"자동 시작 관련 모듈(pywin32 등)을 찾을 수 없어 자동 시작 설정을 동기화할 수 없습니다: {e}")
+        except Exception as e:
+            logger.error(f"자동 시작 설정 동기화 중 오류 발생: {e}", exc_info=True)
     
     def final_cleanup(self):
         if not self._cleanup_done:
@@ -397,8 +466,11 @@ def main():
                     QMessageBox.information(None, "업데이트 완료", f"다운로드가 완료되었습니다.\n프로그램을 종료하면 새 버전이 실행됩니다.")
                     # 종료 후 새 exe 실행
                     import subprocess
-                    QTimer.singleShot(200, lambda: subprocess.Popen([dest]) or os._exit(0))
-                    return 0
+                    subprocess.Popen([dest]) # 새 업데이터 실행
+                    logger.info("새 업데이터 실행 후 현재 애플리케이션 종료 요청")
+                    if QApplication.instance():
+                        QApplication.instance().quit() # 현재 앱 종료
+                    return 0 # main 함수 종료
                 else:
                     QMessageBox.warning(None, "업데이트 실패", "업데이트 파일 다운로드에 실패했습니다.")
         app_manager = ApplicationManager()

@@ -24,7 +24,8 @@ class NotificationManager:
         # 이미 인스턴스가 있는지 확인
         if NotificationManager._instance is not None:
             raise Exception("NotificationManager는 싱글톤 클래스입니다. get_instance() 메서드를 사용하세요.")
-            
+        
+        self.logger = logging.getLogger(__name__) # 로거 초기화
         self.parent = parent
         self.system = platform.system()
         self.notification_enabled = True
@@ -65,8 +66,7 @@ class NotificationManager:
                     self.next_period_warning = settings.get("next_period_warning", True)
                     self.warning_minutes = settings.get("warning_minutes", 5)
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"알림 설정 로드 오류: {e}")
+            self.logger.error(f"알림 설정 로드 오류: {e}")
     
     def save_notification_settings(self):
         """알림 설정 저장"""
@@ -80,8 +80,7 @@ class NotificationManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"알림 설정 저장 오류: {e}")
+            self.logger.error(f"알림 설정 저장 오류: {e}")
     
     def check_notifications(self, current_period, current_day_idx, timetable_data):
         """현재 교시에 대한 알림 확인
@@ -146,8 +145,23 @@ class NotificationManager:
             # win10toast 패키지 사용 시도
             try:
                 from win10toast import ToastNotifier
+                from utils.paths import resource_path # resource_path 임포트
+                
+                # 아이콘 경로 설정
+                app_icon_path = resource_path("assets/app_icon.ico")
+                if not os.path.exists(app_icon_path):
+                    app_icon_path = resource_path("assets/icon.ico")
+                if not os.path.exists(app_icon_path):
+                    app_icon_path = None # 아이콘 없음
+
                 toaster = ToastNotifier()
-                toaster.show_toast(title, message, duration=5, threaded=True)
+                toaster.show_toast(
+                    title,
+                    message,
+                    icon_path=app_icon_path,
+                    duration=5,
+                    threaded=True
+                )
                 return
             except ImportError:
                 pass
@@ -158,8 +172,7 @@ class NotificationManager:
             tray_icon.show()
             tray_icon.showMessage(title, message, QtWidgets.QSystemTrayIcon.Information, 3000)
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"윈도우 알림 오류: {e}")
+            self.logger.error(f"윈도우 알림 오류: {e}")
             # 오류 발생 시 폴백 알림 사용
             self._show_fallback_notification(title, message)
     
@@ -171,8 +184,7 @@ class NotificationManager:
             script = f'display notification "{message}" with title "{title}"'
             subprocess.run(['osascript', '-e', script])
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"macOS 알림 오류: {e}")
+            self.logger.error(f"macOS 알림 오류: {e}")
             # 오류 발생 시 폴백 알림 사용
             self._show_fallback_notification(title, message)
     
@@ -189,5 +201,4 @@ class NotificationManager:
             QtCore.QTimer.singleShot(3000, msg.close)
             msg.show()
         except Exception as e:
-            logger = logging.getLogger(__name__)
-            logger.error(f"기본 알림 오류: {e}")
+            self.logger.error(f"기본 알림 오류: {e}")

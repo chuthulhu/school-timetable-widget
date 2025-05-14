@@ -13,13 +13,14 @@ from utils.config import Config
 from utils.exceptions import DataError, ConfigError
 
 # 로거 설정
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__) # 클래스 내부에서 self.logger 사용 예정
 
-# get_notification_settings_file_path 함수 추가 또는 경로 지정
-def get_notification_settings_file_path():
-    """알림 설정 파일 경로 반환"""
-    from utils.paths import get_data_directory
-    return os.path.join(get_data_directory(), "notification_settings.json")
+# get_notification_settings_file_path 함수는 utils.paths로 이동됨
+# def get_notification_settings_file_path():
+#     """알림 설정 파일 경로 반환"""
+#     from utils.paths import get_data_directory
+#     return os.path.join(get_data_directory(), "notification_settings.json")
+from utils.paths import get_notification_settings_file_path # 여기서 임포트
 
 class SettingsManager:
     """설정 관리 클래스"""
@@ -40,6 +41,8 @@ class SettingsManager:
         if SettingsManager._instance is not None:
             raise Exception("SettingsManager는 싱글톤 클래스입니다. get_instance() 메서드를 사용하세요.")
         
+        self.logger = logging.getLogger(__name__) # 로거 초기화
+
         # 테마 및 스타일 설정
         self.theme = Config.DEFAULT_THEME
         
@@ -101,7 +104,7 @@ class SettingsManager:
         self.load_style_settings()
         self.load_time_settings()
         self.load_timetable_data()
-        self.load_widget_position()
+        self.load_widget_settings() # load_widget_position에서 이름 변경 고려 또는 통합
     
     # Style Settings
     def load_style_settings(self):
@@ -109,7 +112,7 @@ class SettingsManager:
         file_path = get_style_settings_file_path()
         
         if not os.path.exists(file_path):
-            logger.warning(f"스타일 설정 파일이 존재하지 않습니다: {file_path}")
+            self.logger.warning(f"스타일 설정 파일이 존재하지 않습니다: {file_path}")
             return
             
         try:
@@ -141,17 +144,16 @@ class SettingsManager:
             # 테마 설정 로드
             self.theme = style_settings.get("theme", self.theme)
             
-            # 부팅시 자동실행 옵션 로드
-            self.auto_start_enabled = style_settings.get("auto_start_enabled", False)
+            # self.auto_start_enabled = style_settings.get("auto_start_enabled", False) # widget_settings.json으로 이동
             
-            logger.info("스타일 설정을 성공적으로 로드했습니다.")
+            self.logger.info("스타일 설정을 성공적으로 로드했습니다.")
         except json.JSONDecodeError as e:
-            logger.error(f"스타일 설정 파일 형식 오류: {e}")
+            self.logger.error(f"스타일 설정 파일 형식 오류: {e}")
             # 파일 백업 및 기본값 복원
             self._backup_corrupted_file(file_path, "style_settings_backup")
             raise DataError("스타일 설정 파일이 손상되었습니다. 기본값으로 복원합니다.", str(e))
         except Exception as e:
-            logger.error(f"스타일 설정 로드 실패: {e}")
+            self.logger.error(f"스타일 설정 로드 실패: {e}")
             # 오류가 발생해도 기본 스타일은 유지
     def save_style_settings(self):
         """스타일 설정 저장"""
@@ -174,23 +176,22 @@ class SettingsManager:
                 "header_font_size": self.header_font_size,
                 "cell_font_family": self.cell_font_family,
                 "cell_font_size": self.cell_font_size,
-                "theme": self.theme,
-                # 부팅시 자동실행 옵션 저장
-                "auto_start_enabled": getattr(self, 'auto_start_enabled', False)
+                "theme": self.theme
+                # "auto_start_enabled": getattr(self, 'auto_start_enabled', False) # widget_settings.json으로 이동
             }
             
             file_path = get_style_settings_file_path()
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(style_settings, f, ensure_ascii=False, indent=2)
-            logger.info("스타일 설정을 성공적으로 저장했습니다.")
+            self.logger.info("스타일 설정을 성공적으로 저장했습니다.")
         except Exception as e:
-            logger.error(f"스타일 설정 저장 오류: {e}")
+            self.logger.error(f"스타일 설정 저장 오류: {e}")
             raise DataError("스타일 설정 저장 실패", str(e))
             
     def change_theme(self, theme_name):
         """테마 변경"""
         if theme_name not in [Config.THEME_LIGHT, Config.THEME_DARK, Config.THEME_CUSTOM]:
-            logger.error(f"알 수 없는 테마 이름: {theme_name}")
+            self.logger.error(f"알 수 없는 테마 이름: {theme_name}")
             return False
             
         try:
@@ -216,10 +217,10 @@ class SettingsManager:
                 # 설정 저장
                 self.save_style_settings()
                 
-            logger.info(f"테마 변경 완료: {theme_name}")
+            self.logger.info(f"테마 변경 완료: {theme_name}")
             return True
         except Exception as e:
-            logger.error(f"테마 변경 오류: {e}")
+            self.logger.error(f"테마 변경 오류: {e}")
             return False
     
     # Time Settings
@@ -242,7 +243,7 @@ class SettingsManager:
                         "end": QtCore.QTime(end_hour, end_min)
                     }
         except Exception as e:
-            logger.error(f"시간 설정 로드 오류: {e}")
+            self.logger.error(f"시간 설정 로드 오류: {e}")
     
     def save_time_settings(self):
         """시간 설정 저장"""
@@ -261,7 +262,7 @@ class SettingsManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(time_settings, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"시간 설정 저장 오류: {e}")
+            self.logger.error(f"시간 설정 저장 오류: {e}")
     
     # Timetable Data
     def load_timetable_data(self):
@@ -272,7 +273,7 @@ class SettingsManager:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     self.timetable_data = json.load(f)
         except Exception as e:
-            logger.error(f"시간표 데이터 로드 오류: {e}")
+            self.logger.error(f"시간표 데이터 로드 오류: {e}")
             self.timetable_data = {}
     
     def save_timetable_data(self):
@@ -282,13 +283,13 @@ class SettingsManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.timetable_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"시간표 데이터 저장 오류: {e}")
+            self.logger.error(f"시간표 데이터 저장 오류: {e}")
     
-    # 위젯 위치 설정
-    def load_widget_position(self):
-        """저장된 위젯 위치 불러오기 (멀티모니터 스크린 정보 포함)"""
+    # 위젯 설정 (위치, 크기, 자동 시작 등)
+    def load_widget_settings(self):
+        """저장된 위젯 관련 설정 불러오기 (위치, 크기, 자동 시작 등)"""
         try:
-            file_path = get_widget_settings_file_path()
+            file_path = get_widget_settings_file_path() # utils.paths 사용
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     widget_settings = json.load(f)
@@ -296,29 +297,52 @@ class SettingsManager:
                 self.widget_size = widget_settings.get("size", self.widget_size)
                 self.is_position_locked = widget_settings.get("is_position_locked", False)
                 self.widget_screen_info = widget_settings.get("screen_info", None)
+                self.auto_start_enabled = widget_settings.get("auto_start_enabled", False) # 자동 시작 설정 로드
             else:
+                # 파일이 없으면 기본값 사용 (초기화 시 설정된 값)
                 self.widget_screen_info = None
+                # self.auto_start_enabled는 __init__에서 기본값으로 설정됨
+            self.logger.info("위젯 설정을 로드했습니다.")
+        except json.JSONDecodeError as e:
+            self.logger.error(f"위젯 설정 파일 형식 오류: {e}")
+            self._backup_corrupted_file(file_path, "widget_settings_backup")
+            # 기본값으로 복원 (이미 __init__에서 설정됨)
         except Exception as e:
-            logger.error(f"위젯 위치 설정 로드 오류: {e}")
-            self.widget_screen_info = None
+            self.logger.error(f"위젯 설정 로드 오류: {e}")
+            self.widget_screen_info = None # 오류 시 안전한 기본값
 
-    def save_widget_position(self, x, y, width, height, screen_info=None):
-        """위젯 위치 및 스크린 정보 저장 (멀티모니터 지원)"""
+    def save_widget_settings(self):
+        """현재 위젯 관련 설정(위치, 크기, 자동 시작 등)을 파일에 저장합니다."""
         try:
-            self.widget_position = {"x": x, "y": y}
-            self.widget_size = {"width": width, "height": height}
-            self.widget_screen_info = screen_info
             widget_settings = {
                 "position": self.widget_position,
                 "size": self.widget_size,
                 "is_position_locked": self.is_position_locked,
-                "screen_info": self.widget_screen_info
+                "screen_info": self.widget_screen_info,
+                "auto_start_enabled": getattr(self, 'auto_start_enabled', False) # 자동 시작 설정 저장
             }
-            file_path = get_widget_settings_file_path()
+            file_path = get_widget_settings_file_path() # utils.paths 사용
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(widget_settings, f, ensure_ascii=False, indent=2)
+            self.logger.info("위젯 설정을 성공적으로 저장했습니다.")
         except Exception as e:
-            logger.error(f"위젯 위치 설정 저장 오류: {e}")
+            self.logger.error(f"위젯 설정 저장 오류: {e}")
+            # raise DataError("위젯 설정 저장 실패", str(e)) # 필요시 예외 발생
+
+    def save_widget_position(self, x, y, width, height, screen_info=None):
+        """위젯 위치 및 크기, 스크린 정보를 업데이트하고 모든 위젯 설정을 저장합니다."""
+        self.widget_position = {"x": x, "y": y}
+        self.widget_size = {"width": width, "height": height}
+        self.widget_screen_info = screen_info
+        self.save_widget_settings() # 모든 위젯 설정을 저장하는 메서드 호출
+
+    def set_auto_start(self, enabled: bool):
+        """자동 시작 설정을 변경하고 즉시 파일에 저장합니다."""
+        if hasattr(self, 'auto_start_enabled') and self.auto_start_enabled == enabled:
+            return # 변경 사항 없음
+        self.auto_start_enabled = enabled
+        self.logger.info(f"자동 시작 설정 변경: {enabled}")
+        self.save_widget_settings() # 변경된 내용을 포함하여 모든 위젯 설정 저장
     
     def toggle_position_lock(self):
         """위치 고정 상태 토글"""
@@ -343,6 +367,21 @@ class SettingsManager:
             if start_time <= current_time <= end_time:
                 return period
         return None
+
+    def _backup_corrupted_file(self, file_path, backup_prefix="corrupted_backup"):
+        """손상된 설정 파일을 백업합니다."""
+        try:
+            if os.path.exists(file_path):
+                backup_dir = get_backup_directory() # utils.paths 사용
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = os.path.basename(file_path)
+                backup_filename = f"{backup_prefix}_{filename}_{timestamp}"
+                backup_full_path = os.path.join(backup_dir, backup_filename)
+                
+                shutil.move(file_path, backup_full_path) # 원본 파일을 이동하여 백업
+                self.logger.warning(f"손상된 파일 '{file_path}'을(를) '{backup_full_path}'(으)로 백업했습니다.")
+        except Exception as e:
+            self.logger.error(f"손상된 파일 백업 중 오류 발생 ('{file_path}'): {e}")
 
     def create_backup(self, backup_name=None):
         """현재 설정과 시간표 데이터의 백업 생성"""
@@ -388,7 +427,7 @@ class SettingsManager:
             return True, backup_path
             
         except Exception as e:
-            logger.error(f"백업 생성 오류: {e}")
+            self.logger.error(f"백업 생성 오류: {e}")
             return False, str(e)
 
     def restore_backup(self, backup_name):
@@ -427,7 +466,7 @@ class SettingsManager:
             return True, "백업이 성공적으로 복원되었습니다."
             
         except Exception as e:
-            logger.error(f"백업 복원 오류: {e}")
+            self.logger.error(f"백업 복원 오류: {e}")
             return False, str(e)
 
     def get_available_backups(self):
@@ -477,5 +516,5 @@ class SettingsManager:
             return backups
             
         except Exception as e:
-            logger.error(f"백업 목록 로드 오류: {e}")
+            self.logger.error(f"백업 목록 로드 오류: {e}")
             return []

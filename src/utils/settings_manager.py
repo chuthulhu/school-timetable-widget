@@ -90,6 +90,9 @@ class SettingsManager:
         self.next_period_warning = True
         self.warning_minutes = 5
         
+        # 부팅시 자동실행 옵션
+        self.auto_start_enabled = False
+        
         # 설정 불러오기
         self.load_all_settings()
         
@@ -138,6 +141,9 @@ class SettingsManager:
             # 테마 설정 로드
             self.theme = style_settings.get("theme", self.theme)
             
+            # 부팅시 자동실행 옵션 로드
+            self.auto_start_enabled = style_settings.get("auto_start_enabled", False)
+            
             logger.info("스타일 설정을 성공적으로 로드했습니다.")
         except json.JSONDecodeError as e:
             logger.error(f"스타일 설정 파일 형식 오류: {e}")
@@ -168,7 +174,9 @@ class SettingsManager:
                 "header_font_size": self.header_font_size,
                 "cell_font_family": self.cell_font_family,
                 "cell_font_size": self.cell_font_size,
-                "theme": self.theme
+                "theme": self.theme,
+                # 부팅시 자동실행 옵션 저장
+                "auto_start_enabled": getattr(self, 'auto_start_enabled', False)
             }
             
             file_path = get_style_settings_file_path()

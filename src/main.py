@@ -23,6 +23,7 @@ from utils.paths import resource_path, ensure_data_directory_exists
 from utils.settings_manager import SettingsManager
 from notifications.notification_manager import NotificationManager
 from tray_icon import TrayIcon
+from utils.auto_start import enable_auto_start, disable_auto_start
 
 # 정리 작업이 완료되었는지 추적하는 플래그
 _cleanup_done = False

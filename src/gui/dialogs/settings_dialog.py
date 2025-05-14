@@ -37,6 +37,9 @@ class SettingsDialog(QtWidgets.QDialog):
         # === 위젯 크기 탭 ===
         self.setup_widget_size_tab()
         
+        # === 일반 탭 ===
+        self.setup_general_tab()
+        
         # 탭 위젯 추가
         layout.addWidget(self.tab_widget)
         
@@ -349,6 +352,21 @@ class SettingsDialog(QtWidgets.QDialog):
         size_tab.setLayout(size_layout)
         self.tab_widget.addTab(size_tab, "크기/위치")
     
+    def setup_general_tab(self):
+        """일반 설정 탭 구성 (부팅시 자동실행 포함)"""
+        general_tab = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        # 부팅시 자동실행 체크박스
+        self.auto_start_checkbox = QtWidgets.QCheckBox("Windows 부팅 시 자동 실행")
+        # SettingsManager에 저장된 값이 있으면 불러오기, 없으면 False
+        auto_start_enabled = getattr(self.settings_manager, 'auto_start_enabled', False)
+        self.auto_start_checkbox.setChecked(auto_start_enabled)
+        layout.addWidget(self.auto_start_checkbox)
+
+        general_tab.setLayout(layout)
+        self.tab_widget.addTab(general_tab, "일반")
+    
     def update_size_preview(self):
         """위젯 크기 미리보기 업데이트"""
         # 스케일 비율 (원래 크기의 1/3 정도로 표시)
@@ -429,6 +447,11 @@ class SettingsDialog(QtWidgets.QDialog):
             self.font_combo.setCurrentFont(QtGui.QFont(self.settings_manager.font_family))
             self.font_size.setValue(self.settings_manager.font_size)
         self.update_font_preview()
+        
+        # 부팅시 자동실행 체크박스 업데이트
+        if hasattr(self, 'auto_start_checkbox'):
+            auto_start_enabled = getattr(self.settings_manager, 'auto_start_enabled', False)
+            self.auto_start_checkbox.setChecked(auto_start_enabled)
         
     def update_font_preview(self):
         """폰트 미리보기 업데이트"""
@@ -512,7 +535,18 @@ class SettingsDialog(QtWidgets.QDialog):
                     self.parent.resize(new_size['width'], new_size['height'])
         except Exception as e:
             logger.error(f"위젯 크기 설정 적용 중 오류: {e}")
-          # 설정 파일에 저장
+        
+        # 부팅시 자동실행 적용
+        if hasattr(self, 'auto_start_checkbox'):
+            auto_start_enabled = self.auto_start_checkbox.isChecked()
+            self.settings_manager.auto_start_enabled = auto_start_enabled
+            from utils.auto_start import enable_auto_start, disable_auto_start
+            if auto_start_enabled:
+                enable_auto_start(method="shortcut")
+            else:
+                disable_auto_start(method="shortcut")
+        
+        # 설정 파일에 저장
         self.settings_manager.save_style_settings()
         
         # 부모 위젯 스타일 갱신

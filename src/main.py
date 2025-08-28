@@ -387,7 +387,7 @@ class ApplicationManager:
             # os 모듈은 파일 상단에 이미 임포트되어 있음
 
             if platform.system() != "Windows": # Windows 외에는 자동 시작 미지원
-                logger.debug("Windows가 아닌 OS에서는 자동 시작 동기화를 건너<0xEB><0><0x8A><0x8D>니다.")
+                logger.debug("Windows가 아닌 OS에서는 자동 시작 동기화를 건너뜁니다.")
                 return
 
             app_name_for_shortcut = APP_NAME

@@ -34,6 +34,13 @@ class SettingsManager:
         if cls._instance is None:
             cls._instance = SettingsManager()
         return cls._instance
+
+    def load_widget_position(self):
+        """
+        하위호환용: 과거 테스트/코드에서 사용하던 메서드명을 유지합니다.
+        내부적으로 위젯 설정 전체를 로드하는 load_widget_settings를 호출합니다.
+        """
+        return self.load_widget_settings()
     
     def __init__(self):
         """설정 관리자 초기화"""

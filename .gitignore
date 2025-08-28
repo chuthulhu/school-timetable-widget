@@ -2,6 +2,17 @@
 __pycache__/
 *.pyc
 
+# 가상환경
+.venv/
+
+# 빌드/배포 산출물
+build/
+dist/
+*.spec
+
+# 테스트 캐시
+.pytest_cache/
+
 # VSCode 설정 무시 (선택사항)
 .vscode/
 

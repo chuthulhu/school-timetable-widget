@@ -1,0 +1,8 @@
+* text=auto eol=lf
+
+# Treat certain files as binary
+*.ico binary
+*.png binary
+*.exe binary
+
+

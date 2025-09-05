@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pyright/schemas/pyrightconfig.schema.json",
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.10",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": "none",
+  "executionEnvironments": [
+    {
+      "root": "./",
+      "extraPaths": ["./app", "./core", "./infra"]
+    }
+  ]
+}
+
+

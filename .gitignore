@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Build
+dist/
+build/
+*.spec
+
+# Data/Logs
+_data/
+logs/
+*.log
+
+

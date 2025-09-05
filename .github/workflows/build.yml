@@ -1,0 +1,27 @@
+name: build-windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+      - name: Build exe
+        run: |
+          pyinstaller --noconfirm --name TimetableWidgetV2 --icon assets/app_icon.ico --onefile app\main.py
+      - name: Archive dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/**
+
+

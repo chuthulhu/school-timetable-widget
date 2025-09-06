@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtCore
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any, Optional, cast
 
 from infra.settings import load_config, save_config
 from core.schedule import get_current_period
@@ -7,33 +7,41 @@ from app.dialogs.edit_config_dialog import EditConfigDialog
 from infra.theme import get_stylesheet
 
 
+# Pylance에서 Qt 상수/속성 인식 문제를 줄이기 위해 Any로 캐스팅된 별칭 사용
+Qt = cast(Any, QtCore.Qt)
+
+
 class TimetableWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # 창 플래그/속성
         self.setWindowFlags(
-            QtCore.Qt.WindowStaysOnBottomHint |
-            QtCore.Qt.Tool |
-            QtCore.Qt.FramelessWindowHint
+            Qt.WindowStaysOnBottomHint | Qt.Tool | Qt.FramelessWindowHint
         )
-        self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setMouseTracking(True)
 
+        # 설정 로드 및 UI 구성
         self.config, _ = load_config()
         self._build_ui()
         self._apply_position()
 
+        # 타이머로 현재 교시 하이라이트 업데이트
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self._update_current_period)
         self.timer.start(60_000)
         self._update_current_period()
 
+        # 상호작용 상태
         self.dragging = False
         self.resizing = False
-        self.drag_start = None
-        self.resize_start = None
+        self.drag_start: Optional[QtCore.QPoint] = None
+        self.resize_start: Optional[QtCore.QPoint] = None
         self.initial_size = self.size()
-        # Context menu for editing config
-        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+
+        # 컨텍스트 메뉴
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
 
     def _build_ui(self):
@@ -44,36 +52,33 @@ class TimetableWidget(QtWidgets.QWidget):
         self.grid = QtWidgets.QGridLayout()
         self.grid.setSpacing(4)
 
-        # Headers
+        # 헤더/셀 컨테이너
         self.day_headers: Dict[int, QtWidgets.QLabel] = {}
         self.period_headers: Dict[int, QtWidgets.QLabel] = {}
         self.cells: Dict[Tuple[int, int], QtWidgets.QLabel] = {}
 
-        # Top-left empty cell
+        # 좌상단 빈 셀
         self.grid.addWidget(QtWidgets.QLabel(""), 0, 0)
 
-        # Day headers (columns)
+        # 요일 헤더(열)
         for c, day in enumerate(self.config.days, start=1):
             lbl = QtWidgets.QLabel(day.label)
-            lbl.setAlignment(QtCore.Qt.AlignCenter)
+            lbl.setAlignment(Qt.AlignCenter)
             lbl.setProperty("role", "dayHeader")
             self.grid.addWidget(lbl, 0, c)
             self.day_headers[c] = lbl
 
-        # Determine max number of periods across config
-        max_periods = len(self.config.periods)
-
-        # Period headers (rows) and cells
+        # 교시 헤더(행) 및 셀
         for r, p in enumerate(self.config.periods, start=1):
             ph = QtWidgets.QLabel(p.label)
-            ph.setAlignment(QtCore.Qt.AlignCenter)
+            ph.setAlignment(Qt.AlignCenter)
             ph.setProperty("role", "periodHeader")
             self.grid.addWidget(ph, r, 0)
             self.period_headers[r] = ph
 
-            for c, day in enumerate(self.config.days, start=1):
+            for c, _day in enumerate(self.config.days, start=1):
                 cell = QtWidgets.QLabel()
-                cell.setAlignment(QtCore.Qt.AlignCenter)
+                cell.setAlignment(Qt.AlignCenter)
                 cell.setWordWrap(True)
                 cell.setProperty("role", "cell")
                 self.grid.addWidget(cell, r, c)
@@ -86,11 +91,15 @@ class TimetableWidget(QtWidgets.QWidget):
 
     def show_context_menu(self, pos):
         menu = QtWidgets.QMenu(self)
-        edit_cfg = menu.addAction("요일/교시/시간 편집")
-        edit_cfg.triggered.connect(self.open_edit_config)
+        edit_cfg = menu.addAction("시간/요일/시간표 설정")
+        if edit_cfg is not None:
+            edit_cfg.triggered.connect(self.open_edit_config)
         menu.addSeparator()
         exit_act = menu.addAction("종료")
-        exit_act.triggered.connect(QtWidgets.QApplication.instance().quit)
+        if exit_act is not None:
+            app = QtWidgets.QApplication.instance()
+            if app is not None:
+                exit_act.triggered.connect(app.quit)
         menu.exec_(self.mapToGlobal(pos))
 
     def open_edit_config(self):
@@ -102,9 +111,11 @@ class TimetableWidget(QtWidgets.QWidget):
             self._update_current_period()
 
     def _rebuild_grid(self):
-        # Clear existing grid widgets
+        # 기존 위젯 제거
         while self.grid.count():
             item = self.grid.takeAt(0)
+            if item is None:
+                continue
             w = item.widget()
             if w is not None:
                 w.setParent(None)
@@ -112,28 +123,28 @@ class TimetableWidget(QtWidgets.QWidget):
         self.period_headers.clear()
         self.cells.clear()
 
-        # Top-left empty
+        # 좌상단 빈 셀
         self.grid.addWidget(QtWidgets.QLabel(""), 0, 0)
 
-        # Days
+        # 요일 헤더
         for c, day in enumerate(self.config.days, start=1):
             lbl = QtWidgets.QLabel(day.label)
-            lbl.setAlignment(QtCore.Qt.AlignCenter)
+            lbl.setAlignment(Qt.AlignCenter)
             lbl.setProperty("role", "dayHeader")
             self.grid.addWidget(lbl, 0, c)
             self.day_headers[c] = lbl
 
-        # Periods and cells
+        # 교시 헤더와 셀
         for r, p in enumerate(self.config.periods, start=1):
             ph = QtWidgets.QLabel(p.label)
-            ph.setAlignment(QtCore.Qt.AlignCenter)
+            ph.setAlignment(Qt.AlignCenter)
             ph.setProperty("role", "periodHeader")
             self.grid.addWidget(ph, r, 0)
             self.period_headers[r] = ph
 
-            for c, day in enumerate(self.config.days, start=1):
+            for c, _day in enumerate(self.config.days, start=1):
                 cell = QtWidgets.QLabel()
-                cell.setAlignment(QtCore.Qt.AlignCenter)
+                cell.setAlignment(Qt.AlignCenter)
                 cell.setWordWrap(True)
                 cell.setProperty("role", "cell")
                 self.grid.addWidget(cell, r, c)
@@ -148,7 +159,7 @@ class TimetableWidget(QtWidgets.QWidget):
         self.resize(pos.width, pos.height)
 
     def _render_cells(self):
-        # Fill timetable
+        # 시간표 채우기
         day_index = {d.id: idx for idx, d in enumerate(self.config.days, start=1)}
         period_index = {p.id: idx for idx, p in enumerate(self.config.periods, start=1)}
 
@@ -160,8 +171,8 @@ class TimetableWidget(QtWidgets.QWidget):
                     self.cells[(r, c)].setText(str(subject))
 
     def _update_current_period(self):
-        # Determine today id using Python weekday (0=Mon)
-        weekday = QtCore.QDate.currentDate().dayOfWeek()  # 1=Mon ... 7=Sun
+        # 오늘 요일 ID 계산 (1=Mon ... 7=Sun)
+        weekday = QtCore.QDate.currentDate().dayOfWeek()
         day_map = {1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat", 7: "sun"}
         today_id = day_map.get(weekday, None)
         if today_id is None:
@@ -169,19 +180,20 @@ class TimetableWidget(QtWidgets.QWidget):
 
         now = QtCore.QTime.currentTime()
         current_pid = None
-        # Only highlight if today exists in config
+
         valid_day_ids = {d.id for d in self.config.days}
         if today_id in valid_day_ids:
             current_pid = get_current_period(self.config, today_id, now)
 
-        # Apply styles: simple highlight via background role (minimal MVP)
         day_index = {d.id: idx for idx, d in enumerate(self.config.days, start=1)}
         period_index = {p.id: idx for idx, p in enumerate(self.config.periods, start=1)}
 
-        for (r, c), w in self.cells.items():
+        for (_r, _c), w in self.cells.items():
             w.setProperty("current", False)
-            w.style().unpolish(w)
-            w.style().polish(w)
+            st = w.style()
+            if st is not None:
+                st.unpolish(w)
+                st.polish(w)
 
         if current_pid is not None and today_id in day_index:
             r = period_index.get(current_pid)
@@ -189,45 +201,54 @@ class TimetableWidget(QtWidgets.QWidget):
             if r and c and (r, c) in self.cells:
                 w = self.cells[(r, c)]
                 w.setProperty("current", True)
-                w.style().unpolish(w)
-                w.style().polish(w)
+                st = w.style()
+                if st is not None:
+                    st.unpolish(w)
+                    st.polish(w)
 
-    # Basic drag/resize
-    def mousePressEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
-            pos = event.pos()
+    # 드래그/리사이즈
+    def mousePressEvent(self, a0):
+        if a0 and a0.button() == Qt.LeftButton:
+            pos = a0.pos()
             if pos.x() >= self.rect().width() - 20 and pos.y() >= self.rect().height() - 20:
                 self.resizing = True
-                self.resize_start = event.globalPos()
+                self.resize_start = a0.globalPos()
                 self.initial_size = self.size()
-                self.setCursor(QtCore.Qt.SizeFDiagCursor)
+                self.setCursor(Qt.SizeFDiagCursor)
             else:
                 self.dragging = True
-                self.drag_start = event.globalPos() - self.frameGeometry().topLeft()
-                self.setCursor(QtCore.Qt.ClosedHandCursor)
-        super().mousePressEvent(event)
+                self.drag_start = a0.globalPos() - self.frameGeometry().topLeft()
+                self.setCursor(Qt.ClosedHandCursor)
+        super().mousePressEvent(a0)
 
-    def mouseMoveEvent(self, event):
+    def mouseMoveEvent(self, a0):
+        if a0 is None:
+            super().mouseMoveEvent(a0)
+            return
         if self.resizing:
-            diff = event.globalPos() - self.resize_start
+            if self.resize_start is None:
+                return
+            diff = a0.globalPos() - self.resize_start
             new_w = max(self.minimumWidth(), self.initial_size.width() + diff.x())
             new_h = max(self.minimumHeight(), self.initial_size.height() + diff.y())
             self.resize(new_w, new_h)
-        elif self.dragging and event.buttons() == QtCore.Qt.LeftButton and not self.config.ui.position.lock:
-            self.move(event.globalPos() - self.drag_start)
+        elif self.dragging and a0 and a0.buttons() == Qt.LeftButton and not self.config.ui.position.lock:
+            if self.drag_start is None:
+                return
+            self.move(a0.globalPos() - self.drag_start)
         else:
-            if event.pos().x() >= self.rect().width() - 20 and event.pos().y() >= self.rect().height() - 20:
-                self.setCursor(QtCore.Qt.SizeFDiagCursor)
+            if a0 and a0.pos().x() >= self.rect().width() - 20 and a0.pos().y() >= self.rect().height() - 20:
+                self.setCursor(Qt.SizeFDiagCursor)
             else:
-                self.setCursor(QtCore.Qt.ArrowCursor)
-        super().mouseMoveEvent(event)
+                self.setCursor(Qt.ArrowCursor)
+        super().mouseMoveEvent(a0)
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == QtCore.Qt.LeftButton:
+    def mouseReleaseEvent(self, a0):
+        if a0 and a0.button() == Qt.LeftButton:
             self.resizing = False
             self.dragging = False
-            self.setCursor(QtCore.Qt.ArrowCursor)
-            # save position
+            self.setCursor(Qt.ArrowCursor)
+            # 위치 저장
             pos = self.pos()
             size = self.size()
             self.config.ui.position.x = pos.x()
@@ -235,6 +256,4 @@ class TimetableWidget(QtWidgets.QWidget):
             self.config.ui.position.width = size.width()
             self.config.ui.position.height = size.height()
             save_config(self.config)
-        super().mouseReleaseEvent(event)
-
-
+        super().mouseReleaseEvent(a0)

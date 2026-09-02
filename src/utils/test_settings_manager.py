@@ -4,6 +4,7 @@ SettingsManager 단위 테스트
 import os
 import pytest
 import json
+from pathlib import Path
 from utils.settings_manager import SettingsManager
 from utils.paths import get_style_settings_file_path
 
@@ -51,3 +52,35 @@ def test_save_and_load_widget_position_with_screen_info(tmp_path, monkeypatch):
     with open(get_widget_settings_file_path(), encoding="utf-8") as f:
         data = json.load(f)
         assert data["screen_info"] == screen_info
+
+
+def test_create_named_backup_and_prevent_overwrite(tmp_path, monkeypatch):
+    monkeypatch.setenv('SCHOOL_TIMETABLE_DATA_DIR', str(tmp_path))
+    SettingsManager._instance = None
+    sm = SettingsManager.get_instance()
+    sm.timetable_data = {"월": {"1": "수학"}}
+    sm.save_timetable_data()
+
+    success, backup_path = sm.create_backup("내 백업 1")
+
+    assert success is True
+    assert Path(backup_path).parent == tmp_path / "backups"
+    assert (Path(backup_path) / "timetable_data.json").is_file()
+    assert (Path(backup_path) / "description.txt").is_file()
+
+    success, message = sm.create_backup("내 백업 1")
+    assert success is False
+    assert "이미 있습니다" in message
+
+
+@pytest.mark.parametrize("name", ["../outside", "folder/name", "folder\\name", ".."])
+def test_backup_name_cannot_escape_backup_directory(tmp_path, monkeypatch, name):
+    monkeypatch.setenv('SCHOOL_TIMETABLE_DATA_DIR', str(tmp_path))
+    SettingsManager._instance = None
+    sm = SettingsManager.get_instance()
+
+    success, message = sm.create_backup(name)
+
+    assert success is False
+    assert "백업 이름" in message or "백업 경로" in message
+    assert not (tmp_path.parent / "outside").exists()

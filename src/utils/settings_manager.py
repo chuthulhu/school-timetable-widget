@@ -3,6 +3,8 @@ import os
 import datetime
 import shutil
 import logging
+import re
+import tempfile
 from PyQt5 import QtCore
 from utils.paths import (
     get_timetable_file_path, get_settings_file_path, 
@@ -390,27 +392,41 @@ class SettingsManager:
         except Exception as e:
             self.logger.error(f"손상된 파일 백업 중 오류 발생 ('{file_path}'): {e}")
 
+    def _get_backup_path(self, backup_name):
+        """검증된 백업 이름에 대한 안전한 절대 경로를 반환합니다."""
+        if not isinstance(backup_name, str):
+            raise ValueError("백업 이름은 문자열이어야 합니다.")
+
+        backup_name = backup_name.strip()
+        if not backup_name:
+            raise ValueError("백업 이름을 입력하세요.")
+        if len(backup_name) > 80:
+            raise ValueError("백업 이름은 80자 이내로 입력하세요.")
+        if backup_name in {".", ".."} or not re.fullmatch(r"[0-9A-Za-z가-힣 _().-]+", backup_name):
+            raise ValueError("백업 이름에는 한글, 영문, 숫자, 공백, 괄호, 점, 밑줄 및 하이픈만 사용할 수 있습니다.")
+
+        backup_dir = os.path.realpath(get_backup_directory())
+        backup_path = os.path.realpath(os.path.join(backup_dir, backup_name))
+        if os.path.commonpath([backup_dir, backup_path]) != backup_dir:
+            raise ValueError("올바르지 않은 백업 경로입니다.")
+        return backup_path
+
     def create_backup(self, backup_name=None):
         """현재 설정과 시간표 데이터의 백업 생성"""
         try:
             # 데이터 디렉토리 확인
-            from utils.paths import ensure_data_directory_exists, get_data_directory
-            data_dir = ensure_data_directory_exists()
-            
-            # 백업 디렉토리 생성
-            backup_dir = os.path.join(data_dir, "backups")
-            if not os.path.exists(backup_dir):
-                os.makedirs(backup_dir)
-            
+            now = datetime.datetime.now()
             # 백업 이름 설정 (지정되지 않은 경우 날짜 사용)
             if not backup_name:
-                now = datetime.datetime.now()
                 backup_name = f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
-            
-            # 백업 폴더 생성
-            backup_path = os.path.join(backup_dir, backup_name)
-            if not os.path.exists(backup_path):
-                os.makedirs(backup_path)
+
+            backup_path = self._get_backup_path(backup_name)
+            if os.path.exists(backup_path):
+                return False, "같은 이름의 백업이 이미 있습니다. 다른 이름을 사용하세요."
+
+            # 임시 폴더에 완성한 후 이동하여 불완전한 백업이 남지 않게 합니다.
+            backup_dir = get_backup_directory()
+            temporary_path = tempfile.mkdtemp(prefix=".backup_", dir=backup_dir)
             
             # 필요한 파일 목록
             files_to_backup = [
@@ -424,16 +440,20 @@ class SettingsManager:
             # 파일 복사
             for backup_filename, source_path in files_to_backup:
                 if os.path.exists(source_path):
-                    shutil.copy2(source_path, os.path.join(backup_path, backup_filename))
+                    shutil.copy2(source_path, os.path.join(temporary_path, backup_filename))
             
             # 백업 설명 파일 생성
             description = f"시간표 백업 - {now.strftime('%Y년 %m월 %d일 %H:%M:%S')}"
-            with open(os.path.join(backup_path, "description.txt"), 'w', encoding='utf-8') as f:
+            with open(os.path.join(temporary_path, "description.txt"), 'w', encoding='utf-8') as f:
                 f.write(description)
+
+            os.replace(temporary_path, backup_path)
             
             return True, backup_path
             
         except Exception as e:
+            if 'temporary_path' in locals() and os.path.exists(temporary_path):
+                shutil.rmtree(temporary_path, ignore_errors=True)
             self.logger.error(f"백업 생성 오류: {e}")
             return False, str(e)
 
@@ -441,10 +461,9 @@ class SettingsManager:
         """지정된 백업에서 설정 복원"""
         try:
             # 데이터 디렉토리
-            from utils.paths import get_data_directory
-            backup_path = os.path.join(get_data_directory(), "backups", backup_name)
+            backup_path = self._get_backup_path(backup_name)
             
-            if not os.path.exists(backup_path):
+            if not os.path.isdir(backup_path):
                 return False, f"백업을 찾을 수 없습니다: {backup_name}"
             
             # 필요한 파일 목록

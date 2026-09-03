@@ -40,6 +40,7 @@ SettingsManager must satisfy all of the following:
 import importlib
 import json
 import os
+import re
 import sys
 
 import pytest
@@ -325,6 +326,38 @@ def test_create_backup_flushes_pending_widget_settings(tmp_path):
     assert backed_up["position"] == {"x": 810, "y": 920}
     assert backed_up["size"] == {"width": 1200, "height": 1000}
     assert manager._pending_widget_settings is None
+
+
+def test_create_backup_without_name_uses_existing_automatic_name_format():
+    manager = SettingsManager.get_instance()
+
+    success, backup_path = manager.create_backup()
+
+    assert success is True
+    assert re.fullmatch(r"backup_\d{8}_\d{6}", os.path.basename(backup_path))
+
+
+def test_create_backup_with_explicit_name_succeeds():
+    manager = SettingsManager.get_instance()
+
+    success, backup_path = manager.create_backup("명시적이름")
+
+    assert success is True
+    assert os.path.basename(backup_path) == "명시적이름"
+
+
+def test_explicit_backup_name_preserves_description_format():
+    manager = SettingsManager.get_instance()
+
+    success, backup_path = manager.create_backup("설명형식확인")
+
+    assert success is True
+    with open(os.path.join(backup_path, "description.txt"), encoding="utf-8") as file:
+        description = file.read()
+    assert re.fullmatch(
+        r"시간표 백업 - \d{4}년 \d{2}월 \d{2}일 \d{2}:\d{2}:\d{2}",
+        description,
+    )
 
 
 def test_restore_backup_cannot_be_overwritten_by_an_older_pending_snapshot(tmp_path):

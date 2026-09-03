@@ -474,8 +474,8 @@ class SettingsManager:
                 os.makedirs(backup_dir)
             
             # 백업 이름 설정 (지정되지 않은 경우 날짜 사용)
+            now = datetime.datetime.now()
             if not backup_name:
-                now = datetime.datetime.now()
                 backup_name = f"backup_{now.strftime('%Y%m%d_%H%M%S')}"
             
             # 백업 폴더 생성

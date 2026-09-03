@@ -40,6 +40,7 @@ def test_save_and_load_widget_position_with_screen_info(tmp_path, monkeypatch):
     # 저장
     screen_info = {'geometry': [1920, 0, 1920, 1080], 'name': 'MockScreen1'}
     sm.save_widget_position(200, 300, 400, 500, screen_info)
+    sm.flush_pending_widget_settings()
     # 인스턴스 새로 생성(싱글톤 해제)
     SettingsManager._instance = None
     sm2 = SettingsManager.get_instance()

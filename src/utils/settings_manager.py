@@ -3,6 +3,7 @@ import os
 import datetime
 import shutil
 import logging
+import tempfile
 from PyQt5 import QtCore
 from utils.paths import (
     get_timetable_file_path, get_settings_file_path, 
@@ -24,6 +25,8 @@ from utils.paths import get_notification_settings_file_path # 여기서 임포�
 
 class SettingsManager:
     """설정 관리 클래스"""
+
+    WIDGET_SETTINGS_SAVE_DEBOUNCE_MS = 250
     
     # 싱글톤 인스턴스
     _instance = None
@@ -49,6 +52,13 @@ class SettingsManager:
             raise Exception("SettingsManager는 싱글톤 클래스입니다. get_instance() 메서드를 사용하세요.")
         
         self.logger = logging.getLogger(__name__) # 로거 초기화
+
+        self._pending_widget_settings = None
+        self._widget_settings_save_timer = QtCore.QTimer()
+        self._widget_settings_save_timer.setSingleShot(True)
+        self._widget_settings_save_timer.timeout.connect(
+            self.flush_pending_widget_settings
+        )
 
         # 테마 및 스타일 설정
         self.theme = Config.DEFAULT_THEME
@@ -319,22 +329,79 @@ class SettingsManager:
             self.widget_screen_info = None # 오류 시 안전한 기본값
 
     def save_widget_settings(self):
-        """현재 위젯 관련 설정(위치, 크기, 자동 시작 등)을 파일에 저장합니다."""
+        """현재 위젯 설정 snapshot의 저장을 debounce하여 요청합니다."""
+        self._pending_widget_settings = self._create_widget_settings_snapshot()
+
+        if QtCore.QCoreApplication.instance() is not None:
+            self._widget_settings_save_timer.start(
+                self.WIDGET_SETTINGS_SAVE_DEBOUNCE_MS
+            )
+
+    def _create_widget_settings_snapshot(self):
+        """현재 메모리 상태에서 일관된 위젯 설정 snapshot을 만듭니다."""
+        return {
+            "position": self.widget_position.copy(),
+            "size": self.widget_size.copy(),
+            "is_position_locked": self.is_position_locked,
+            "screen_info": (
+                self.widget_screen_info.copy()
+                if isinstance(self.widget_screen_info, dict)
+                else self.widget_screen_info
+            ),
+            "auto_start_enabled": getattr(self, 'auto_start_enabled', False)
+        }
+
+    def flush_pending_widget_settings(self):
+        """대기 중인 마지막 위젯 설정을 즉시 저장합니다."""
+        if self._pending_widget_settings is None:
+            return
+
+        self._widget_settings_save_timer.stop()
+        widget_settings = self._pending_widget_settings
+
         try:
-            widget_settings = {
-                "position": self.widget_position,
-                "size": self.widget_size,
-                "is_position_locked": self.is_position_locked,
-                "screen_info": self.widget_screen_info,
-                "auto_start_enabled": getattr(self, 'auto_start_enabled', False) # 자동 시작 설정 저장
-            }
-            file_path = get_widget_settings_file_path() # utils.paths 사용
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(widget_settings, f, ensure_ascii=False, indent=2)
+            self._write_widget_settings_atomically(widget_settings)
+            self._pending_widget_settings = None
             self.logger.info("위젯 설정을 성공적으로 저장했습니다.")
         except Exception as e:
             self.logger.error(f"위젯 설정 저장 오류: {e}")
-            # raise DataError("위젯 설정 저장 실패", str(e)) # 필요시 예외 발생
+
+    def _write_widget_settings_atomically(self, widget_settings):
+        """같은 디렉터리의 임시 파일을 완성한 뒤 원자적으로 교체합니다."""
+        file_path = get_widget_settings_file_path()
+        directory = os.path.dirname(file_path)
+        os.makedirs(directory, exist_ok=True)
+        temp_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                encoding='utf-8',
+                dir=directory,
+                prefix='.widget_settings_',
+                suffix='.tmp',
+                delete=False
+            ) as temp_file:
+                temp_path = temp_file.name
+                json.dump(
+                    widget_settings,
+                    temp_file,
+                    ensure_ascii=False,
+                    indent=2
+                )
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+
+            os.replace(temp_path, file_path)
+            temp_path = None
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    self.logger.warning(
+                        f"임시 위젯 설정 파일 삭제 실패: {temp_path}"
+                    )
 
     def save_widget_position(self, x, y, width, height, screen_info=None):
         """위젯 위치 및 크기, 스크린 정보를 업데이트하고 모든 위젯 설정을 저장합니다."""
@@ -393,6 +460,10 @@ class SettingsManager:
     def create_backup(self, backup_name=None):
         """현재 설정과 시간표 데이터의 백업 생성"""
         try:
+            self.flush_pending_widget_settings()
+            if self._pending_widget_settings is not None:
+                return False, "대기 중인 위젯 설정을 저장하지 못해 백업을 생성할 수 없습니다."
+
             # 데이터 디렉토리 확인
             from utils.paths import ensure_data_directory_exists, get_data_directory
             data_dir = ensure_data_directory_exists()
@@ -440,6 +511,10 @@ class SettingsManager:
     def restore_backup(self, backup_name):
         """지정된 백업에서 설정 복원"""
         try:
+            self.flush_pending_widget_settings()
+            if self._pending_widget_settings is not None:
+                return False, "대기 중인 위젯 설정을 저장하지 못해 백업을 복원할 수 없습니다."
+
             # 데이터 디렉토리
             from utils.paths import get_data_directory
             backup_path = os.path.join(get_data_directory(), "backups", backup_name)

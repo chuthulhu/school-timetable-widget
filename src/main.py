@@ -202,6 +202,13 @@ class ApplicationManager:
             return
         
         logger.info("리소스 정리 시작...")
+
+        # debounce 대기 중인 위젯 설정을 타이머 정지 전에 저장
+        try:
+            if hasattr(self, 'settings_manager') and self.settings_manager:
+                self.settings_manager.flush_pending_widget_settings()
+        except Exception as e:
+            logger.error(f"위젯 설정 flush 중 오류: {str(e)}")
         
         # 모든 QTimer 중지 시도
         try:

@@ -1,12 +1,10 @@
 """Behavioral contracts for recovering the distributed v1.0.1 application.
 
-The executable's missing cell-sizing and debounced-save implementations are
-specified below, but deliberately are not represented by failing, skipped, or
-xfail tests.  Once production APIs exist, the data tables in this module can be
-used directly as parametrized test inputs.
+The executable's recovered cell-sizing and debounced-save implementations are
+specified and exercised below.
 
-Future cell-size contract
--------------------------
+Cell-size contract
+------------------
 The release notes define these logical rules::
 
     minimum cell height = font size * 2.5 * DPI scale
@@ -39,25 +37,74 @@ SettingsManager must satisfy all of the following:
 
 import importlib
 import json
+import math
 import os
 import re
 import sys
 
 import pytest
-from PyQt5 import QtCore
+from PyQt5 import QtCore, QtWidgets
 
+from gui.widget import Widget
 from utils.config import Config
 from utils.paths import get_widget_settings_file_path
 from utils.settings_manager import SettingsManager
+from utils.styling import calculate_minimum_cell_size
 
 
-# Ready-made inputs for the future production cell-size calculation tests.
+# Release-derived inputs for the production cell-size calculation tests.
 V101_CELL_SIZE_CASES_FOR_TEN_POINT_FONT = (
     pytest.param(1.00, 25.00, 30.00, id="100-percent-dpi"),
     pytest.param(1.25, 31.25, 37.50, id="125-percent-dpi"),
     pytest.param(1.50, 37.50, 45.00, id="150-percent-dpi"),
     pytest.param(2.00, 50.00, 60.00, id="200-percent-dpi"),
 )
+
+
+@pytest.mark.parametrize(
+    ("dpi_scale", "expected_height", "expected_width"),
+    V101_CELL_SIZE_CASES_FOR_TEN_POINT_FONT,
+)
+def test_v101_minimum_cell_size_dpi_contract(
+    dpi_scale, expected_height, expected_width
+):
+    width, height = calculate_minimum_cell_size(10, dpi_scale)
+
+    assert width == pytest.approx(expected_width)
+    assert height == pytest.approx(expected_height)
+
+
+@pytest.mark.parametrize(
+    ("font_size", "dpi_scale"),
+    (
+        pytest.param(6, 1.25, id="small-font"),
+        pytest.param(24, 1.50, id="large-font"),
+    ),
+)
+def test_v101_minimum_cell_size_is_linear_for_other_font_sizes(
+    font_size, dpi_scale
+):
+    width, height = calculate_minimum_cell_size(font_size, dpi_scale)
+
+    assert width == pytest.approx(font_size * 3.0 * dpi_scale)
+    assert height == pytest.approx(font_size * 2.5 * dpi_scale)
+
+
+def test_widget_dpi_scale_uses_logical_dpi_without_device_pixel_ratio():
+    class ScreenStub:
+        def logicalDotsPerInch(self):
+            return 120.0
+
+        def devicePixelRatio(self):
+            raise AssertionError("devicePixelRatio must not be applied")
+
+    class WidgetStub:
+        BASE_LOGICAL_DPI = 96.0
+
+        def _get_target_screen(self):
+            return ScreenStub()
+
+    assert Widget._get_initial_dpi_scale(WidgetStub()) == pytest.approx(1.25)
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +114,93 @@ def isolated_settings_manager(tmp_path, monkeypatch):
     SettingsManager._instance = None
     yield
     SettingsManager._instance = None
+
+
+@pytest.fixture(scope="module")
+def qapplication():
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    yield application
+
+
+class _NotificationStub:
+    next_period_warning = False
+    warning_minutes = 5
+
+    def check_notifications(self, *args):
+        pass
+
+
+def _create_widget(monkeypatch, manager, dpi_scale):
+    monkeypatch.setattr(
+        Widget,
+        "_get_initial_dpi_scale",
+        lambda self: dpi_scale,
+    )
+    widget = Widget(
+        settings_manager=manager,
+        notification_manager=_NotificationStub(),
+    )
+    widget.timer.stop()
+    return widget
+
+
+def test_widget_applies_cell_and_grid_minimums(qapplication, monkeypatch):
+    manager = SettingsManager.get_instance()
+    manager.header_font_size = 11
+    manager.cell_font_size = 10
+    widget = _create_widget(monkeypatch, manager, dpi_scale=2.0)
+
+    header_width, header_height = calculate_minimum_cell_size(11, 2.0)
+    cell_width, cell_height = calculate_minimum_cell_size(10, 2.0)
+    expected_weekday_width = math.ceil(max(header_width, cell_width))
+    expected_period_height = math.ceil(max(header_height, cell_height))
+
+    assert all(
+        label.minimumWidth() == math.ceil(header_width)
+        for label in widget.day_headers.values()
+    )
+    assert all(
+        label.minimumHeight() == expected_period_height
+        for label in widget.period_headers.values()
+    )
+    assert all(
+        cell.minimumSize()
+        == QtCore.QSize(math.ceil(cell_width), math.ceil(cell_height))
+        for cell in widget.cell_widgets.values()
+    )
+    assert widget.grid_layout.columnMinimumWidth(1) == expected_weekday_width
+    assert widget.grid_layout.rowMinimumHeight(1) == expected_period_height
+    assert widget.minimumWidth() >= Config.DEFAULT_WINDOW_SIZE[0]
+    assert widget.minimumHeight() >= Config.DEFAULT_WINDOW_SIZE[1]
+
+    widget.deleteLater()
+
+
+def test_smaller_saved_size_is_clamped_to_widget_minimum(
+    qapplication, monkeypatch
+):
+    manager = SettingsManager.get_instance()
+    manager.header_font_size = 24
+    manager.cell_font_size = 24
+    manager.widget_size = {"width": 10, "height": 10}
+    widget = _create_widget(monkeypatch, manager, dpi_scale=2.0)
+
+    assert widget.size() == widget.minimumSize()
+    assert widget.width() > manager.widget_size["width"]
+    assert widget.height() > manager.widget_size["height"]
+
+    widget.deleteLater()
+
+
+def test_normal_saved_size_is_preserved(qapplication, monkeypatch):
+    manager = SettingsManager.get_instance()
+    manager.widget_size = {"width": 800, "height": 650}
+    widget = _create_widget(monkeypatch, manager, dpi_scale=1.0)
+
+    assert widget.size() == QtCore.QSize(800, 650)
+
+    widget.deleteLater()
 
 
 @pytest.mark.parametrize(

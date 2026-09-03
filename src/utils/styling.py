@@ -9,6 +9,12 @@
 
 from PyQt5.QtGui import QColor
 
+
+def calculate_minimum_cell_size(font_size, dpi_scale):
+    """Return the v1.0.1 minimum cell width and height in Qt coordinates."""
+    return font_size * 3.0 * dpi_scale, font_size * 2.5 * dpi_scale
+
+
 def hex_to_rgba(hex_color, opacity):
     """HEX 색상 코드와 불투명도를 RGBA 형식으로 변환
     

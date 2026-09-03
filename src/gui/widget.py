@@ -4,6 +4,7 @@ import os
 import datetime
 import json
 import logging
+import math
 
 # 새로 추가: Qt 경고 메시지 억제
 os.environ["QT_LOGGING_RULES"] = "qt.qpa.*=false"
@@ -15,9 +16,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from notifications.notification_manager import NotificationManager
 from utils.settings_manager import SettingsManager
 from utils.styling import (
-    hex_to_rgba, generate_header_style, generate_cell_style, 
-    generate_current_style, generate_drag_style
+    calculate_minimum_cell_size, hex_to_rgba, generate_header_style,
+    generate_cell_style, generate_current_style, generate_drag_style
 )
+from utils.config import Config
 from .dialogs.time_dialog import TimeRangeDialog
 from .dialogs.settings_dialog import SettingsDialog
 from .dialogs.timetable_dialog import TimetableEditDialog
@@ -93,6 +95,8 @@ class DragResizeMixin:
             self.save_widget_position()
 
 class Widget(DragResizeMixin, QtWidgets.QWidget):
+    BASE_LOGICAL_DPI = 96.0
+
     def __init__(self, settings_manager=None, notification_manager=None, app_manager=None, parent=None):
         super().__init__(parent) # parent 인자 전달
         # 타이머 초기화 코드 추가
@@ -139,10 +143,7 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
     def init_ui(self):
         """UI 초기화"""
         # 위젯 크기 설정
-        self.setMinimumSize(400, 300)
-        
-        # 저장된 위젯 위치 불러오기 및 적용
-        self.apply_saved_position()
+        self.setMinimumSize(*Config.DEFAULT_WINDOW_SIZE)
         
         # 전체 레이아웃
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -201,7 +202,79 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         
         # 시간표 데이터 표시
         self.update_timetable_display()
-    
+
+        # 초기 화면 DPI와 폰트 크기에 맞는 셀/전체 위젯 하한 적용
+        self.apply_minimum_cell_sizes()
+
+        # 계산된 minimum보다 작지 않도록 저장된 위치와 크기 적용
+        self.apply_saved_position()
+
+    def _get_target_screen(self):
+        """Return the saved screen when available, otherwise the primary screen."""
+        screen_info = getattr(self.settings_manager, 'widget_screen_info', None)
+
+        if screen_info:
+            for screen in QtWidgets.QApplication.screens():
+                if (
+                    'geometry' in screen_info and
+                    screen.geometry().getRect() == tuple(screen_info['geometry'])
+                ) or (
+                    'name' in screen_info and
+                    screen.name() == screen_info['name']
+                ):
+                    return screen
+
+        return QtWidgets.QApplication.primaryScreen()
+
+    def _get_initial_dpi_scale(self):
+        """Return the target screen's logical-DPI scale for Qt geometry units."""
+        screen = self._get_target_screen()
+        if screen is None:
+            return 1.0
+        # QScreen logical DPI is already in Qt's coordinate space. Applying
+        # devicePixelRatio here would scale the minimum a second time.
+        return screen.logicalDotsPerInch() / self.BASE_LOGICAL_DPI
+
+    def apply_minimum_cell_sizes(self):
+        """Apply the v1.0.1 font-based lower bounds to the existing grid."""
+        dpi_scale = self._get_initial_dpi_scale()
+        header_width, header_height = calculate_minimum_cell_size(
+            self.settings_manager.header_font_size,
+            dpi_scale,
+        )
+        cell_width, cell_height = calculate_minimum_cell_size(
+            self.settings_manager.cell_font_size,
+            dpi_scale,
+        )
+
+        header_width = math.ceil(header_width)
+        header_height = math.ceil(header_height)
+        cell_width = math.ceil(cell_width)
+        cell_height = math.ceil(cell_height)
+        weekday_width = max(header_width, cell_width)
+        period_height = max(header_height, cell_height)
+
+        for label in self.day_headers.values():
+            label.setMinimumSize(header_width, header_height)
+        for label in self.period_headers.values():
+            label.setMinimumSize(header_width, period_height)
+        for cell in self.cell_widgets.values():
+            cell.setMinimumSize(cell_width, cell_height)
+
+        self.grid_layout.setColumnMinimumWidth(0, header_width)
+        for col in range(1, 6):
+            self.grid_layout.setColumnMinimumWidth(col, weekday_width)
+        self.grid_layout.setRowMinimumHeight(0, header_height)
+        for row in range(1, 8):
+            self.grid_layout.setRowMinimumHeight(row, period_height)
+
+        layout_minimum = self.layout().minimumSize()
+        default_width, default_height = Config.DEFAULT_WINDOW_SIZE
+        self.setMinimumSize(
+            max(default_width, layout_minimum.width()),
+            max(default_height, layout_minimum.height()),
+        )
+
     def apply_saved_position(self):
         """
         저장된 위치와 크기 적용 (멀티모니터 지원)
@@ -210,34 +283,20 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         """
         pos = self.settings_manager.widget_position
         size = self.settings_manager.widget_size
-        screen_info = getattr(self.settings_manager, 'widget_screen_info', None)
-
-        # 현재 연결된 모든 스크린 정보
-        screens = QtWidgets.QApplication.screens()
-        target_screen = None
-
-        # 저장된 스크린 정보가 있으면 해당 스크린 찾기 (geometry 우선, name fallback)
-        if screen_info:
-            for screen in screens:
-                if (
-                    'geometry' in screen_info and
-                    screen.geometry().getRect() == tuple(screen_info['geometry'])
-                ) or (
-                    'name' in screen_info and
-                    screen.name() == screen_info['name']
-                ):
-                    target_screen = screen
-                    break
-        # 없으면 primaryScreen 사용
-        if not target_screen:
-            target_screen = QtWidgets.QApplication.primaryScreen()
+        target_screen = self._get_target_screen()
 
         screen_geom = target_screen.geometry()
         
         # 위젯이 화면 경계를 벗어나지 않도록 위치 조정
         # 위젯의 너비와 높이를 고려
-        widget_width = size.get("width", self.width()) # 저장된 크기가 없다면 현재 크기 사용
-        widget_height = size.get("height", self.height())
+        widget_width = max(
+            self.minimumWidth(),
+            size.get("width", self.width()),
+        )
+        widget_height = max(
+            self.minimumHeight(),
+            size.get("height", self.height()),
+        )
 
         # x 좌표 조정
         min_x = screen_geom.left()

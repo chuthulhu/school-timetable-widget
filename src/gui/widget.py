@@ -36,9 +36,14 @@ class DragResizeMixin:
         self.drag_start_pos = None
         self.resize_start_pos = None
         self.initial_size = self.size()
+        self._user_resize_target = None
     
     def handle_mouse_press(self, event):
         if event.button() == QtCore.Qt.LeftButton:
+            # A new gesture can begin before the previous release has settled.
+            # Keep its pending intent until a new resize move supersedes it.
+            if not self._commit_user_resize:
+                self._user_resize_target = None
             # 위치가 고정되어 있으면 크기 조절만 허용
             if self.settings_manager.is_position_locked:
                 if event.pos().x() >= self.rect().width() - 20 and event.pos().y() >= self.rect().height() - 20:
@@ -75,6 +80,8 @@ class DragResizeMixin:
             diff = event.globalPos() - self.resize_start_pos
             new_width = max(self.minimumWidth(), self.initial_size.width() + diff.x())
             new_height = max(self.minimumHeight(), self.initial_size.height() + diff.y())
+            # Keep mouse intent separate from any subsequent native DPI resize.
+            self._user_resize_target = QtCore.QSize(new_width, new_height)
             self.resize(new_width, new_height)
         elif self.dragging and event.buttons() == QtCore.Qt.LeftButton and not self.settings_manager.is_position_locked:
             # 위치 고정이 아닐 때만 드래그 허용
@@ -87,15 +94,24 @@ class DragResizeMixin:
     
     def handle_mouse_release(self, event):
         if event.button() == QtCore.Qt.LeftButton:
+            if self.resizing and self._user_resize_target is not None:
+                # Commit the allowed, settled size after restoring drag styles.
+                # The mouse request survives any intervening native DPI resize.
+                self._commit_user_resize = True
             self.resizing = False
             self.dragging = False
             self.setCursor(QtCore.Qt.ArrowCursor)
             self.update_styles()
+            if self._dpi_transition_pending or self._commit_user_resize:
+                self._schedule_dpi_correction()
             # 위치 및 크기 저장
             self.save_widget_position()
 
 class Widget(DragResizeMixin, QtWidgets.QWidget):
     BASE_LOGICAL_DPI = 96.0
+    DPI_SETTLE_MS = 40
+    DESIGN_LAYOUT_MARGINS = (10, 10, 10, 10)
+    DESIGN_GRID_SPACING = (4, 4)
 
     def __init__(self, settings_manager=None, notification_manager=None, app_manager=None, parent=None):
         super().__init__(parent) # parent 인자 전달
@@ -106,6 +122,20 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         self.settings_manager = settings_manager if settings_manager else SettingsManager.get_instance()
         self.notification_manager = notification_manager if notification_manager else NotificationManager.get_instance()
         self.app_manager = app_manager # app_manager는 main.py에서 self를 전달
+        self._screen_change_window = None
+        self._dpi_screen = None
+        self._dpi_transition_generation = 0
+        self._dpi_transition_pending = False
+        self._save_after_dpi_transition = False
+        self._commit_user_resize = False
+        self._normalizing_dpi = False
+        # Runtime UX reconstruction, not a claim of byte-for-byte v1.0.1 recovery.
+        # QSizeF in 96-DPI design units; seeded once after startup layout settles.
+        # Legacy persisted sizes remain current-screen Qt geometry, not design units.
+        self._design_preferred_size = None
+        self._dpi_correction_timer = QtCore.QTimer(self)
+        self._dpi_correction_timer.setSingleShot(True)
+        self._dpi_correction_timer.timeout.connect(self._apply_deferred_dpi_correction)
         
         # 프레임 없는 창으로 설정
         self.setWindowFlags(
@@ -122,6 +152,8 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         
         # 위젯 초기화
         self.init_ui()
+        for label in self.findChildren(QtWidgets.QLabel):
+            label.installEventFilter(self)
         
         # 현재 시간에 맞는 교시 하이라이트
         self.update_current_period()
@@ -147,12 +179,13 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         
         # 전체 레이아웃
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(*self.DESIGN_LAYOUT_MARGINS)
         main_layout.setSpacing(0)
         
         # 시간표 그리드 레이아웃
         self.grid_layout = QtWidgets.QGridLayout()
-        self.grid_layout.setSpacing(4)
+        self.grid_layout.setHorizontalSpacing(self.DESIGN_GRID_SPACING[0])
+        self.grid_layout.setVerticalSpacing(self.DESIGN_GRID_SPACING[1])
         
         # 요일 헤더 생성 (1행)
         self.day_headers = {}
@@ -228,16 +261,40 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
 
     def _get_initial_dpi_scale(self):
         """Return the target screen's logical-DPI scale for Qt geometry units."""
-        screen = self._get_target_screen()
+        return Widget._get_screen_dpi_scale(self, self._get_target_screen())
+
+    def _get_screen_dpi_scale(self, screen):
+        """Return a screen's logical-DPI scale for Qt geometry units."""
         if screen is None:
             return 1.0
         # QScreen logical DPI is already in Qt's coordinate space. Applying
         # devicePixelRatio here would scale the minimum a second time.
         return screen.logicalDotsPerInch() / self.BASE_LOGICAL_DPI
 
-    def apply_minimum_cell_sizes(self):
-        """Apply the v1.0.1 font-based lower bounds to the existing grid."""
-        dpi_scale = self._get_initial_dpi_scale()
+    def _apply_dpi_layout_spacing(self, scale):
+        """Scale from design units, preserving each opposite margin pair's sum."""
+        left, top, right, bottom = self.DESIGN_LAYOUT_MARGINS
+        horizontal = math.floor((left + right) * scale + 0.5)
+        vertical = math.floor((top + bottom) * scale + 0.5)
+        # Split the rounded pair total in the original design proportions.
+        # Integer arithmetic also avoids floor(10.999999...) at 110% DPI.
+        left = horizontal * left // (left + right)
+        top = vertical * top // (top + bottom)
+        self.layout().setContentsMargins(
+            left, top, horizontal - left, vertical - top,
+        )
+        horizontal_spacing, vertical_spacing = self.DESIGN_GRID_SPACING
+        self.grid_layout.setHorizontalSpacing(math.floor(horizontal_spacing * scale + 0.5))
+        self.grid_layout.setVerticalSpacing(math.floor(vertical_spacing * scale + 0.5))
+
+    def apply_minimum_cell_sizes(self, screen=None):
+        """Set current-DPI geometry and settle hints before measuring the widget minimum."""
+        dpi_scale = (
+            self._get_screen_dpi_scale(screen)
+            if screen is not None
+            else self._get_initial_dpi_scale()
+        )
+        self._apply_dpi_layout_spacing(dpi_scale)
         header_width, header_height = calculate_minimum_cell_size(
             self.settings_manager.header_font_size,
             dpi_scale,
@@ -268,12 +325,229 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         for row in range(1, 8):
             self.grid_layout.setRowMinimumHeight(row, period_height)
 
+        self._settle_dpi_layout()
         layout_minimum = self.layout().minimumSize()
         default_width, default_height = Config.DEFAULT_WINDOW_SIZE
         self.setMinimumSize(
             max(default_width, layout_minimum.width()),
             max(default_height, layout_minimum.height()),
         )
+        # A raised widget minimum can resize the window synchronously.
+        self.layout().activate()
+
+    def _connect_screen_signals(self):
+        """Connect runtime screen signals once the native window exists."""
+        window_handle = self.windowHandle()
+        if window_handle is None:
+            return
+
+        if window_handle is not self._screen_change_window:
+            if self._screen_change_window is not None:
+                try:
+                    self._screen_change_window.screenChanged.disconnect(
+                        self._handle_screen_changed
+                    )
+                except (TypeError, RuntimeError):
+                    pass
+            window_handle.screenChanged.connect(self._handle_screen_changed)
+            self._screen_change_window = window_handle
+
+        self._handle_screen_changed(window_handle.screen())
+
+    def _connect_dpi_screen(self, screen):
+        """Track logical-DPI changes from only the window's current screen."""
+        if screen is self._dpi_screen:
+            return
+
+        if self._dpi_screen is not None:
+            try:
+                self._dpi_screen.logicalDotsPerInchChanged.disconnect(
+                    self._handle_screen_dpi_changed
+                )
+            except (TypeError, RuntimeError):
+                pass
+
+        self._dpi_screen = screen
+        if screen is not None:
+            screen.logicalDotsPerInchChanged.connect(
+                self._handle_screen_dpi_changed
+            )
+
+    def _disconnect_screen_signals(self):
+        """Release QWindow and QScreen signal connections on close."""
+        self._dpi_correction_timer.stop()
+        self._dpi_transition_generation += 1
+        self._dpi_transition_pending = False
+        self._connect_dpi_screen(None)
+        if self._screen_change_window is not None:
+            try:
+                self._screen_change_window.screenChanged.disconnect(
+                    self._handle_screen_changed
+                )
+            except (TypeError, RuntimeError):
+                pass
+            self._screen_change_window = None
+
+    def _handle_screen_changed(self, screen):
+        """Switch DPI tracking and wait for native geometry handling to finish."""
+        if screen is None:
+            screen = QtWidgets.QApplication.primaryScreen()
+        self._connect_dpi_screen(screen)
+        self._schedule_dpi_correction()
+
+    def _handle_screen_dpi_changed(self, _dpi):
+        """Coalesce screen/DPI notifications without adopting native sizes."""
+        self._schedule_dpi_correction()
+
+    def _schedule_dpi_correction(self):
+        self._dpi_transition_generation += 1
+        self._dpi_transition_pending = True
+        # Restart one owned timer: no queue of callbacks retaining old screens.
+        self._dpi_correction_timer.start(self.DPI_SETTLE_MS)
+
+    def _observe_dpi_layout_event(self, event):
+        if (getattr(self, '_dpi_transition_pending', False)
+                and not self._normalizing_dpi
+                and event.type() in (
+                    QtCore.QEvent.LayoutRequest, QtCore.QEvent.StyleChange,
+                    QtCore.QEvent.FontChange, QtCore.QEvent.ApplicationFontChange,
+                )):
+            self._schedule_dpi_correction()
+
+    def event(self, event):
+        result = super().event(event)
+        self._observe_dpi_layout_event(event)
+        return result
+
+    def eventFilter(self, watched, event):
+        self._observe_dpi_layout_event(event)
+        return super().eventFilter(watched, event)
+
+    def _refresh_timetable_label_size_hints(self):
+        """Refresh QLabel's own hints without changing text, style, or wrapping."""
+        labels = (
+            list(self.day_headers.values())
+            + list(self.period_headers.values())
+            + list(self.cell_widgets.values())
+        )
+        seen = set()
+        for label in labels:
+            if id(label) in seen:
+                continue
+            seen.add(id(label))
+            label.ensurePolished()
+            # Qt 5 QLabel caches sizeHint/minimumSizeHint including the minimum
+            # at calculation time. updateGeometry() only invalidates the layout
+            # item cache; reapplying wordWrap also invalidates QLabel's hints.
+            label.setWordWrap(label.wordWrap())
+            label.updateGeometry()
+
+    def apply_user_requested_size(self, width, height):
+        """Apply and persist a size explicitly chosen outside mouse resizing."""
+        requested = QtCore.QSize(width, height)
+        self._user_resize_target = requested
+        self._commit_user_resize = True
+        self._save_after_dpi_transition = True
+        self.resize(requested)
+        self._schedule_dpi_correction()
+
+    def finalize_pending_user_save(self):
+        """Finish a pending user save synchronously during application shutdown."""
+        if not self._save_after_dpi_transition:
+            return
+        # A second gesture can start before the preceding release has settled.
+        # Shutdown ends that gesture; it must not strand the earlier save.
+        if self.dragging or self.resizing:
+            self.dragging = self.resizing = False
+            self.update_styles()
+        self._apply_deferred_dpi_correction()
+
+    def _settle_dpi_layout(self):
+        self.ensurePolished()
+        self._refresh_timetable_label_size_hints()
+        self.grid_layout.invalidate()
+        self.layout().invalidate()
+        self.layout().activate()
+
+    def _scaled_design_size(self, screen):
+        """Round once, from the original design preference, never from actual."""
+        scale = self._get_screen_dpi_scale(screen)
+        return QtCore.QSize(
+            math.floor(self._design_preferred_size.width() * scale + 0.5),
+            math.floor(self._design_preferred_size.height() * scale + 0.5),
+        )
+
+    def _apply_deferred_dpi_correction(self):
+        """Apply the current layout's acceptable size without losing preference."""
+        if not self._dpi_transition_pending:
+            return
+        self._dpi_correction_timer.stop()
+        if self.resizing or self.dragging:
+            # Release restores styles and restarts the single settle timer.
+            return
+        generation = self._dpi_transition_generation
+        window_handle = self.windowHandle()
+        screen = window_handle.screen() if window_handle is not None else self._dpi_screen
+        if screen is None:
+            screen = QtWidgets.QApplication.primaryScreen()
+        self._connect_dpi_screen(screen)
+        self._normalizing_dpi = True
+        try:
+            self.apply_minimum_cell_sizes(screen)
+        finally:
+            self._normalizing_dpi = False
+        if generation != self._dpi_transition_generation:
+            return
+
+        initializing = self._design_preferred_size is None
+        if self._commit_user_resize:
+            requested = self._user_resize_target
+        elif initializing:
+            # Restored geometry is already in the startup screen's coordinates.
+            # Include its real font/layout constraint before choosing a baseline.
+            requested = self.size()
+        else:
+            requested = self._scaled_design_size(screen)
+        # Query the top-level widget's real root layout, including HFW; simply
+        # expanding to minimumSize misses wrapped text's required height.
+        target_size = QtWidgets.QLayout.closestAcceptableSize(self, requested)
+        if generation != self._dpi_transition_generation:
+            return
+        if self.size() != target_size:
+            self.resize(target_size)
+        if generation != self._dpi_transition_generation:
+            return
+
+        self._keep_in_available_geometry(screen)
+        # resize/move can synchronously start another screen transition.
+        if generation != self._dpi_transition_generation:
+            return
+        if initializing or self._commit_user_resize:
+            self._design_preferred_size = (
+                QtCore.QSizeF(self.size()) / self._get_screen_dpi_scale(screen)
+            )
+        if self._commit_user_resize:
+            self._commit_user_resize = False
+            self._user_resize_target = None
+        self._dpi_transition_pending = False
+        if self._save_after_dpi_transition:
+            self._save_after_dpi_transition = False
+            self.save_widget_position()
+
+    def _keep_in_available_geometry(self, screen):
+        """Clamp position after either growth or shrink, respecting Qt minima."""
+        if screen is None:
+            return
+
+        available = screen.availableGeometry()
+        max_x = max(available.left(), available.right() - self.width() + 1)
+        max_y = max(available.top(), available.bottom() - self.height() + 1)
+        target_pos = QtCore.QPoint(
+            max(available.left(), min(self.x(), max_x)),
+            max(available.top(), min(self.y(), max_y)),
+        )
+        if self.pos() != target_pos:
+            self.move(target_pos)
 
     def apply_saved_position(self):
         """
@@ -324,6 +598,10 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         현재 위젯의 위치와 크기 및 스크린 정보 저장 (멀티모니터 지원)
         - 현재 위젯이 속한 스크린의 geometry, name을 함께 settings에 저장
         """
+        if self._dpi_transition_pending:
+            # Preserve this existing user save request, not a native intermediate.
+            self._save_after_dpi_transition = True
+            return
         pos = self.pos()
         size = self.size()
         # 현재 위젯이 속한 스크린 정보 저장
@@ -500,6 +778,11 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
         """마우스 릴리즈 이벤트 처리"""
         self.handle_mouse_release(event)
         super().mouseReleaseEvent(event)
+
+    def showEvent(self, event):
+        """Attach screen tracking after Qt creates the native window."""
+        super().showEvent(event)
+        self._connect_screen_signals()
     
     def show_context_menu(self, pos):
         """마우스 우클릭 메뉴 표시"""
@@ -611,6 +894,8 @@ class Widget(DragResizeMixin, QtWidgets.QWidget):
     def closeEvent(self, event):
         """위젯 종료 시 호출되는 이벤트"""
         logger.info("위젯 종료 이벤트 발생")
+        self.finalize_pending_user_save()
+        self._disconnect_screen_signals()
         try:
             if self.cleanup_on_close:
                 logger.info("종료 시 리소스 정리 함수 호출")

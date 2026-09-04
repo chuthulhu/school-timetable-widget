@@ -632,7 +632,9 @@ class SettingsDialog(QtWidgets.QDialog):
                 if (old_size.get('width') != new_size['width'] or
                     old_size.get('height') != new_size['height']):
                     logger.info(f"위젯 크기 변경: {old_size} -> {new_size}")
-                    self.parent.resize(new_size['width'], new_size['height'])
+                    self.parent.apply_user_requested_size(
+                        new_size['width'], new_size['height']
+                    )
         except Exception as e:
             logger.error(f"위젯 크기 설정 적용 중 오류: {e}")
         

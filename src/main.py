@@ -203,6 +203,13 @@ class ApplicationManager:
         
         logger.info("리소스 정리 시작...")
 
+        # Widget의 사용자 요청을 먼저 확정하고, 실패해도 기존 snapshot은 flush
+        try:
+            if hasattr(self, 'widget') and self.widget:
+                self.widget.finalize_pending_user_save()
+        except Exception as e:
+            logger.error(f"위젯 사용자 요청 확정 중 오류: {str(e)}")
+
         # debounce 대기 중인 위젯 설정을 타이머 정지 전에 저장
         try:
             if hasattr(self, 'settings_manager') and self.settings_manager:

@@ -1,18 +1,19 @@
 # Feature Map
 
-기준: `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`.
+초기 기준: `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`.
+M1 후속 기준 production HEAD: `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` (production 무변경).
 이 문서는 [상태](LEGACY-RECOVERY-STATUS.md)나 [감사 판정](RECOVERY-COMPLETION-AUDIT.md)을 반복하는 대신,
 기능의 호출 지점·데이터 소유권·이식 단위를 연결한다. .NET target은 **RECOMMENDED 방향**이며 확정 아키텍처가 아니다.
-M1–M4는 감사 문서의 남은 검증 묶음이다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
+M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 완료했고, 남은 검증 묶음은 M2–M4다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
 
 ## Feature to source / data mapping
 
 | Feature | Legacy source / entry | Settings/data | Verification | .NET target module |
 | --- | --- | --- | --- | --- |
-| 시간표 표시 | [Widget.init_ui / update_timetable_display](../src/gui/widget.py) | timetable_data, 월–금 / 문자열 1–7, 여러 줄 text | layout 검증, 내용은 M1 | Features/Timetable |
-| 교시 계산·강조 | [SettingsManager.get_current_period](../src/utils/settings_manager.py), Widget.update_current_period / set_next_update_timer | time_ranges, 현재 요일·QTime | M1, inclusive 경계와 첫 일치 | Features/Timetable |
-| 편집·병합·분할 | [TimetableEditDialog](../src/gui/dialogs/timetable_dialog.py)의 merge_selected_cells / split_selected_cell / save_timetable | 같은 timetable JSON, 별도 span field 없음 | M1, 마지막 교시·저장 손실 확인 | Features/Timetable |
-| 교시 시각 편집 | [TimeRangeDialog.save_time_ranges](../src/gui/dialogs/time_dialog.py) | time_settings.json | M1/M3 | Features/Settings |
+| 시간표 표시 | [Widget.init_ui / update_timetable_display](../src/gui/widget.py) | timetable_data, 월–금 / 문자열 1–7, 여러 줄 text | V, M1 COMPLETE: 내용·native render | Features/Timetable |
+| 교시 계산·강조 | [SettingsManager.get_current_period](../src/utils/settings_manager.py), Widget.update_current_period / set_next_update_timer | time_ranges, 현재 요일·QTime | V, M1 COMPLETE: inclusive·첫 일치·stale-date quirk | Features/Timetable |
+| 편집·병합·분할 | [TimetableEditDialog](../src/gui/dialogs/timetable_dialog.py)의 merge_selected_cells / split_selected_cell / save_timetable | 같은 timetable JSON, 별도 span field 없음 | M1 CHARACTERIZED: 손실·마지막 span/분할 예외, REDESIGN | Features/Timetable |
+| 교시 시각 편집 | [TimeRangeDialog.save_time_ranges](../src/gui/dialogs/time_dialog.py) | time_settings.json | M1 COMPLETE; backup/import M3 | Features/Settings |
 | Font·colors·theme·opacity | [SettingsDialog](../src/gui/dialogs/settings_dialog.py), [ThemeSelector](../src/gui/components/theme_selector.py), [ColorButton](../src/gui/components/color_button.py), [styling](../src/utils/styling.py) | style_settings.json, Config.THEMES / DEFAULT_STYLES | 부분 저장 검증, transaction은 M2 | Features/Settings |
 | Explicit size | SettingsDialog.apply_settings → [Widget.apply_user_requested_size](../src/gui/widget.py) | widget_settings.size, runtime design preferred | V: HFW actual, hide/show, DPI | Features/Settings |
 | Window geometry·drag·lock | Widget DragResizeMixin / apply_saved_position / save_widget_position | position, size, is_position_locked, screen_info | 저장/DPI V, lock/native M4 | Platform/Windows/Windowing |
@@ -21,8 +22,8 @@ M1–M4는 감사 문서의 남은 검증 묶음이다. 아래 파일 링크와 
 | Autostart | [auto_start](../src/utils/auto_start.py), ApplicationManager._sync_auto_start_setting | widget_settings.auto_start_enabled + Startup .lnk | JSON V, OS 동작 M4 | Platform/Windows/Startup |
 | 시작·정리 | ApplicationManager.run / cleanup_resources | data/log directory, singleton managers | flush 순서 V, 전체 lifecycle M4 | App / Platform/Windows/Lifecycle |
 | Single instance | 현재 entry에는 guard 없음 | 공유 data directory만 있음 | 부재 소스 확인, 두 번째 실행 M4 | Platform/Windows/SingleInstance, 신설 여부 결정 |
-| 교시 알림·예고 | [NotificationManager](../src/notifications/notification_manager.py) 및 Widget.update_current_period | notification_settings.json, in-memory last_notified_* | M1/M4, 예고 호출 제한 | Features/Notifications / Platform/Windows/Notifications |
-| JSON 위치·로드·저장 | [paths](../src/utils/paths.py), [SettingsManager](../src/utils/settings_manager.py) | 아래 5파일, appdirs, 환경변수 | widget V, 나머지 M3 | Infrastructure/Persistence |
+| 교시 알림·예고 | [NotificationManager](../src/notifications/notification_manager.py) 및 Widget.update_current_period | notification_settings.json, in-memory last_notified_* | M1 CHARACTERIZED 예고 callback; native 표시 M4 | Features/Notifications / Platform/Windows/Notifications |
+| JSON 위치·로드·저장 | [paths](../src/utils/paths.py), [SettingsManager](../src/utils/settings_manager.py) | 아래 5파일, appdirs, 환경변수 | widget V; timetable/time M1 완료; 전체 lifecycle M3 | Infrastructure/Persistence |
 | Backup·restore·delete | [BackupRestoreDialog](../src/gui/dialogs/backup_dialog.py), SettingsManager.create_backup / restore_backup | backups/name/5파일 + description.txt | flush/name V, 전체 왕복 M3 | Infrastructure/Persistence |
 | QR 공유·PNG | [QRShareDialog.generate_qr_code](../src/gui/dialogs/qr_share_dialog.py) | 아래 공유 envelope, Base64 JSON | payload M3, 실제 QR 미검증 | Features/Sharing |
 | QR camera/image·JSON import | [ImportDialog](../src/gui/dialogs/import_dialog.py) | 선택한 timetable/time_settings만 덮어쓰기 | payload M3, camera 환경 수리 제외 | Features/Sharing |
@@ -71,7 +72,7 @@ image decode에는 pyzbar/Pillow가 필요하다. 데이터 형식의 이식과 
 - Runtime design geometry와 persisted current-screen geometry는 다른 값이다. .NET schema에 단위를 명시하되
   legacy 입력에서 없는 source DPI를 사실처럼 추정하지 않는다.
 - Main widget은 bottom/tool/frameless, dialog는 top hint다. “항상 위”를 공통 기본값으로 옮기지 않는다.
-- Merge는 editor 기능이고 main grid는 독립 셀이다. .NET의 블록 표시를 추가하려면 별도 설계 결정이 필요하다.
+- Merge는 editor 기능이고 main grid는 독립 셀이다. M1에서 병합 저장 손실과 AutoText를 확인했으며 .NET에서는 REDESIGN한다. .NET의 블록 표시를 추가하려면 별도 설계 결정이 필요하다.
 - 스타일 Cancel, 위치 reset, 알림 예고의 알려진 제약은 감사 문서의 K3–K5를 따른다. 버그도 그대로 이식하라는 뜻이 아니다.
 - Backup restore 후 알림·geometry의 적용 시점을 실제 관찰한 뒤 이식 명세에 확정한다.
 - Process killer는 단일 실행 기능이 아니며 aggressive 종료 도구를 .NET 사양으로 옮기지 않는다.

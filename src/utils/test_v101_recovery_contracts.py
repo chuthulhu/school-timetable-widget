@@ -1415,12 +1415,30 @@ def test_dpi_stale_label_hints_refresh_all_labels_before_widget_minimum(qapplica
 
 
 def test_dpi_real_label_design_geometry_scales_and_recovers(qapplication, monkeypatch):
+    # This contract measures geometry recovery without current-period styling.
+    # Keep the host clock from adding the legacy highlight's thicker border.
+    import datetime
+    from gui import widget as widget_module
+
+    real_time = QtCore.QTime
+
+    class Clock(real_time):
+        @staticmethod
+        def currentTime():
+            return real_time(8, 10)
+
+    monkeypatch.setattr(QtCore, "QTime", Clock)
+    monkeypatch.setattr(widget_module, "datetime", SimpleNamespace(
+        datetime=SimpleNamespace(now=lambda: datetime.datetime(2026, 9, 7, 8, 10))))
     manager = SettingsManager.get_instance()
     manager.header_font_size = manager.cell_font_size = 13
     manager.header_font_family = manager.cell_font_family = "Arial"
     manager.widget_size = {"width": 472, "height": 501}
     manager.timetable_data = {"월": {str(r): "x\nx" for r in range(1, 8)}}
     widget = _create_widget(monkeypatch, manager, dpi_scale=1.0)
+    assert widget.current_period is None
+    assert all("font-weight: bold" not in cell.styleSheet()
+               for cell in widget.cell_widgets.values())
     screen = _RuntimeScreenStub(96)
     monkeypatch.setattr(widget, "windowHandle", lambda: _WindowHandleStub(screen))
     apply_minimum = widget.apply_minimum_cell_sizes

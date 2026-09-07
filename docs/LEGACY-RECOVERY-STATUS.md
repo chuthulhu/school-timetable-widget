@@ -24,7 +24,7 @@ byte-for-byte 복원한 브랜치가 아니다. .NET 재작성 시 기능·디�
 | 문서 감사 | 2026-09-07, 위 HEAD 및 clean working tree 확인 후 시작 |
 
 95 passed 및 아래 Windows 결과는 작업 인계에서 제공된 기존 검증 결과다.
-이번 문서 감사에서는 소스와 테스트를 읽었으며 테스트나 Windows 실측을 재실행하지 않았다.
+초기 문서 감사에서는 소스와 테스트만 읽었다. 후속 M1 실행은 아래 별도 기록이며 기존 수치를 소급 변경하지 않는다.
 이 숫자는 미래 커밋의 테스트 수나 통과 상태를 보장하지 않는다.
 
 ### Evidence vocabulary
@@ -174,6 +174,41 @@ HFW, margin/spacing, 누적 growth 방지를 확인한 결과다.
 | Automatic DPI-only transition | user save/preferred 오염 없음 |
 | Deferred normalization geometry warning | 0 |
 
+## M1 completion and validation
+
+2026-09-07, production HEAD `bb30e3c9983c9faf8acf7a76e03dc79662e6818b`에서 M1을
+**COMPLETE / CHARACTERIZED**로 판정했다. [Timetable Behavior Specification](TIMETABLE-BEHAVIOR-SPEC.md)에
+데이터·편집·inclusive 경계·강조·저장·malformed·native-only evidence와 .NET 분류를 고정한다.
+새 [전용 contract module](../src/utils/test_timetable_behavior_contracts.py)은 정상 계약과
+legacy merge/span·stale-date·invalid time quirks를 분리한다. 후속 시각 의존성 수정은 기존 DPI test 하나의 clock 고정에 한정한다.
+
+Native Windows 한글/IME·multiline·Save/Cancel/X·새 프로세스 복원, 650×540 대표 render,
+빈 셀·주말 강조를 사용자 조작과 TEMP 로그/캡처로 확인했다. 원본 설정 hash/mtime 불변 및
+진단 프로세스 종료 확인을 인계했다. 이번 문서화에서 native 검증을 반복하지 않았다.
+QTimeEdit `9:00` 보정/유지 구분, `24:00`·`09:00:00` native typing은 비차단 UNKNOWN이다.
+
+실행 환경: Windows / Python 3.12.14 / PyQt5 5.15.11 / Qt 5.15.2, offscreen 및 TEMP 격리.
+아래는 이 HEAD 위의 미커밋 docs/tests 변경을 포함한 실제 실행 결과다. 원래 HEAD 자체가 189개 테스트를 포함한다는 뜻은 아니다.
+
+| 실행 | 결과 |
+| --- | --- |
+| 새 M1 전용 module | **94 passed**, 0.84s |
+| 기존 두 test modules | **95 passed**, 31.84s |
+| Root 전체 pytest | **189 passed**, 32.45s (기존 95 + 신규 94) |
+
+세 실행 모두 최종 결과에 warning/failure 없음. `git diff --check`와 새 파일 공백 검사 통과.
+
+후속 최종 검증에서 기존 DPI test의 실제 시각 의존성(188 passed / 1 failed)을 확인했다.
+M1 pollution이 아니라 강조 border 1→2px에 따른 HFW +2px였다. 해당 DPI test만 월요일
+08:10으로 고정하고 기존 geometry 기대값을 유지했다. 전용 M1에 강조/HFW 왕복 contract를
+1개 추가했다(.NET REDESIGN). 후속 검증: DPI 단독 1 passed, 새 contract 1 passed,
+기존 95 passed (32.06s), M1 95 passed (1.00s), 전체 **190 passed** 두 번 (32.45s / 33.12s).
+모두 warning/failure 없음. Production 무변경, system clock 변경 없이 offscreen/TEMP로 실행했다.
+
+M1 완료는 알려진 결함을 수리했다는 뜻이 아니다. .NET의 destructive merge, validation,
+scheduler, AutoText, 저장 실패 UX는 REDESIGN 대상이다. 남은 MUST 묶음은 M2 Settings,
+M3 Data lifecycle, M4 Windows reference runbook이다. 전체 recovery 종료와 구분한다.
+
 ## Known limitations
 
 - **Persisted geometry source-DPI metadata 없음.** 저장 size는 현재 화면의 Qt geometry이고
@@ -185,7 +220,7 @@ HFW, margin/spacing, 누적 growth 방지를 확인한 결과다.
 - **Native geometry warnings.** 사용자 drag/native monitor transition 중 일부
   `QWindowsWindow::setGeometry` warning은 있을 수 있다. 검증된 deferred correction loop는 없고,
   deferred normalization warning 0과 전체 native warning 0을 혼동하지 않는다.
-- **범위 한계.** 전체 설정 편집, 시간 계산, tray/autostart/알림, update/build는 아래 감사 문서에서 별도로 판정한다.
+- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. 전체 설정 appearance, backup/import, tray/autostart/알림, update/build는 감사 문서에서 별도로 판정한다.
 
 ## Golden Reference rules
 

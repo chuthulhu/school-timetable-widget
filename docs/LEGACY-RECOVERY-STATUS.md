@@ -122,7 +122,7 @@ runtime 위치는 available geometry에 clamp한다. 음수 좌표 모니터도 
 [SettingsDialog.apply_settings](../src/gui/dialogs/settings_dialog.py)의 크기 변경은
 `Widget.apply_user_requested_size`로 사용자 의도를 전달한다. Qt/HFW가 허용하는 실제 크기를
 design preferred 및 legacy persisted size에 반영한다. hide/show와 DPI 왕복 후에도 유지된다.
-이는 설정 대화상자의 모든 Preview/Apply/Cancel 의미를 검증했다는 뜻은 아니다.
+이 기존 검증과 별도로 아래 M2에서 Preview/Apply/Cancel과 재오픈 control 의미를 characterization했다.
 
 ### Shutdown persistence
 
@@ -206,8 +206,8 @@ M1 pollution이 아니라 강조 border 1→2px에 따른 HFW +2px였다. 해당
 모두 warning/failure 없음. Production 무변경, system clock 변경 없이 offscreen/TEMP로 실행했다.
 
 M1 완료는 알려진 결함을 수리했다는 뜻이 아니다. .NET의 destructive merge, validation,
-scheduler, AutoText, 저장 실패 UX는 REDESIGN 대상이다. 남은 MUST 묶음은 M2 Settings,
-M3 Data lifecycle, M4 Windows reference runbook이다. 전체 recovery 종료와 구분한다.
+scheduler, AutoText, 저장 실패 UX는 REDESIGN 대상이다. M1 당시 남은 MUST 묶음은 M2 Settings,
+M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2 완료 후 M3/M4만 남는다. 전체 recovery 종료와 구분한다.
 
 ## Known limitations
 
@@ -220,7 +220,7 @@ M3 Data lifecycle, M4 Windows reference runbook이다. 전체 recovery 종료와
 - **Native geometry warnings.** 사용자 drag/native monitor transition 중 일부
   `QWindowsWindow::setGeometry` warning은 있을 수 있다. 검증된 deferred correction loop는 없고,
   deferred normalization warning 0과 전체 native warning 0을 혼동하지 않는다.
-- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. 전체 설정 appearance, backup/import, tray/autostart/알림, update/build는 감사 문서에서 별도로 판정한다.
+- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. M2 appearance는 아래 범위에서 완료했다. backup/import, tray/autostart/알림, update/build는 감사 문서에서 별도로 판정한다.
 
 ## Golden Reference rules
 
@@ -230,3 +230,49 @@ M3 Data lifecycle, M4 Windows reference runbook이다. 전체 recovery 종료와
 4. .NET 재작성은 이 브랜치를 behavior reference로 사용하며, 알려진 버그를 자동으로 새 앱의 요구사항으로 승격하지 않는다.
 5. 새 검증은 commit·환경·입력·기대/관찰 결과를 함께 남긴다. 중요한 신규 fixture와 결과는 Git에서 찾을 수 있게 한다.
 6. v2/Tauri 구조를 병합하거나 Python 아키텍처를 대규모 정리하는 작업은 이 복구의 종료 조건이 아니다.
+
+## M2 completion and validation
+
+2026-09-07, `recovery-v1-release` / `da21ece624985dfa2b60be9cfc0c2043c440e242`와
+clean working tree에서 시작했다. M2 **COMPLETE / CHARACTERIZED**.
+[Settings Behavior Specification](SETTINGS-BEHAVIOR-SPEC.md)과
+[전용 M2 module](../src/utils/test_settings_behavior_contracts.py)에 다섯 상태
+(control / memory / visual / persisted / dialog-open rollback baseline)를 고정했다.
+
+일반 Preview는 저장하지 않지만 theme는 현재 style 전체를 즉시 저장한다.
+Apply 후 rollback baseline이 유지되어 Cancel/X가 visual10/file18을 만들 수 있다.
+signal 재진입·opacity/alpha 손실·preview clipping·size control 불일치·position reset은
+LEGACY QUIRK / .NET REDESIGN이다. 정상 preview/Apply/restart UX는 MATCH,
+legacy JSON/size intent/content minimum 개념은 COMPATIBLE이다.
+
+Native Windows 사용자 조작과 TEMP observer로 font Preview→Cancel/X,
+Apply18→Preview24→Cancel10/file18, theme→Cancel→새 process dark 복원,
+Apply18→X10→새 process18을 확인했다. 최종 native actual550×792/control550×520,
+24pt preview required 약1065/actual520은 환경 의존 기록이며 자동 절대 수치가 아니다.
+원본 profile 5개 SHA256/mtime와 repository source/docs 33개 hash 불변 및 진단 앱 정상 종료 확인.
+원본 이미지/로그는 TEMP에만 있으며 명세는 절차와 관찰의 영구 기록이다.
+
+자동 검증은 offscreen/TEMP, 실제 사용 가능한 font family, 월요일08:10 process clock,
+OS autostart/notification stub을 사용한다. QApplication font/style은 변경하지 않고
+singleton/environment monkeypatch와 dialog/widget/timer cleanup으로 격리한다.
+subprocess는 SettingsManager reload만 검사하며 full main/native startup 증거와 구분한다.
+
+M2 최초 작성 중 layout 미실현/지연 확정 전 조회로 실패한 fixture를 offscreen show 및
+owned timer settle로 정정했다. Production 수정이나 host clock 변경은 없다.
+최종 실행 결과는 아래 표에 기록한다.
+
+| Run | Result |
+| --- | --- |
+| M2 focused | 14 passed (7.58s) |
+| Existing recovery modules | 95 passed (31.89s) |
+| M1 focused | 95 passed (0.94s) |
+| Full pytest 1 | 204 passed (40.14s) |
+| Full pytest 2 | 204 passed (40.09s) |
+
+최종 다섯 실행은 pytest warning/failure 없이 통과했다. 최종 count는 기존190 + M2 14 = 204.
+문서 상대 링크 80개와 git diff --check 통과. 테스트는 semantic JSON/실제 controls/QSS/geometry를
+검사하며 native X와 platform pixel 수치를 자동화했다고 주장하지 않는다. M2 commit-ready다.
+
+남은 MUST는 **M3 Data lifecycle / M4 Windows reference runbook**, 두 묶음이다.
+실제 autostart/notification delivery·backup/import가 M2와 함께 완료됐다는 뜻은 아니다.
+이번 변경은 docs 4개와 신규 test module 하나이며 production 무변경, commit/push/PR 미실행.

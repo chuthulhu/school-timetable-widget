@@ -1,10 +1,11 @@
 # Feature Map
 
 초기 기준: `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`.
+M2 기준 HEAD: `da21ece624985dfa2b60be9cfc0c2043c440e242` (production 무변경).
 M1 후속 기준 production HEAD: `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` (production 무변경).
 이 문서는 [상태](LEGACY-RECOVERY-STATUS.md)나 [감사 판정](RECOVERY-COMPLETION-AUDIT.md)을 반복하는 대신,
 기능의 호출 지점·데이터 소유권·이식 단위를 연결한다. .NET target은 **RECOMMENDED 방향**이며 확정 아키텍처가 아니다.
-M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 완료했고, 남은 검증 묶음은 M2–M4다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
+M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 완료했고, M2도 [설정 명세](SETTINGS-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 COMPLETE / CHARACTERIZED이며, 남은 MUST는 M3/M4다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
 
 ## Feature to source / data mapping
 
@@ -14,8 +15,8 @@ M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 
 | 교시 계산·강조 | [SettingsManager.get_current_period](../src/utils/settings_manager.py), Widget.update_current_period / set_next_update_timer | time_ranges, 현재 요일·QTime | V, M1 COMPLETE: inclusive·첫 일치·stale-date quirk | Features/Timetable |
 | 편집·병합·분할 | [TimetableEditDialog](../src/gui/dialogs/timetable_dialog.py)의 merge_selected_cells / split_selected_cell / save_timetable | 같은 timetable JSON, 별도 span field 없음 | M1 CHARACTERIZED: 손실·마지막 span/분할 예외, REDESIGN | Features/Timetable |
 | 교시 시각 편집 | [TimeRangeDialog.save_time_ranges](../src/gui/dialogs/time_dialog.py) | time_settings.json | M1 COMPLETE; backup/import M3 | Features/Settings |
-| Font·colors·theme·opacity | [SettingsDialog](../src/gui/dialogs/settings_dialog.py), [ThemeSelector](../src/gui/components/theme_selector.py), [ColorButton](../src/gui/components/color_button.py), [styling](../src/utils/styling.py) | style_settings.json, Config.THEMES / DEFAULT_STYLES | 부분 저장 검증, transaction은 M2 | Features/Settings |
-| Explicit size | SettingsDialog.apply_settings → [Widget.apply_user_requested_size](../src/gui/widget.py) | widget_settings.size, runtime design preferred | V: HFW actual, hide/show, DPI | Features/Settings |
+| Font·colors·theme·opacity | [SettingsDialog](../src/gui/dialogs/settings_dialog.py), [ThemeSelector](../src/gui/components/theme_selector.py), [ColorButton](../src/gui/components/color_button.py), [styling](../src/utils/styling.py) | style_settings.json, Config.THEMES / DEFAULT_STYLES | M2 COMPLETE / CHARACTERIZED; Preview/Apply/Cancel/theme quirks는 설정 명세 참조 | Features/Settings |
+| Explicit size | SettingsDialog.apply_settings → [Widget.apply_user_requested_size](../src/gui/widget.py) | widget_settings.size, runtime design preferred | V: HFW actual, hide/show, DPI; M2 constrained 재오픈/control 불일치 기록 | Features/Settings |
 | Window geometry·drag·lock | Widget DragResizeMixin / apply_saved_position / save_widget_position | position, size, is_position_locked, screen_info | 저장/DPI V, lock/native M4 | Platform/Windows/Windowing |
 | DPI·minimum·HFW | Widget.apply_minimum_cell_sizes / _apply_deferred_dpi_correction, styling.calculate_minimum_cell_size | runtime 96-DPI QSizeF, 현재 screen logical DPI | 자동+Windows V | Platform/Windows/Windowing |
 | Tray·visibility·종료 | [TrayIcon](../src/tray_icon.py), [ApplicationManager.safe_exit](../src/main.py), Widget.closeEvent | visible state는 JSON에 저장 안 함 | geometry hide/show V, 입력 M4 | Platform/Windows/Tray |
@@ -73,7 +74,7 @@ image decode에는 pyzbar/Pillow가 필요하다. 데이터 형식의 이식과 
   legacy 입력에서 없는 source DPI를 사실처럼 추정하지 않는다.
 - Main widget은 bottom/tool/frameless, dialog는 top hint다. “항상 위”를 공통 기본값으로 옮기지 않는다.
 - Merge는 editor 기능이고 main grid는 독립 셀이다. M1에서 병합 저장 손실과 AutoText를 확인했으며 .NET에서는 REDESIGN한다. .NET의 블록 표시를 추가하려면 별도 설계 결정이 필요하다.
-- 스타일 Cancel, 위치 reset, 알림 예고의 알려진 제약은 감사 문서의 K3–K5를 따른다. 버그도 그대로 이식하라는 뜻이 아니다.
+- 스타일 Cancel·테마 즉시 저장·signal/opacity·위치 reset은 [M2 명세](SETTINGS-BEHAVIOR-SPEC.md)의 REDESIGN 분류를 따른다. 알림 예고는 감사 문서 K3을 따른다. 버그도 그대로 이식하라는 뜻이 아니다.
 - Backup restore 후 알림·geometry의 적용 시점을 실제 관찰한 뒤 이식 명세에 확정한다.
 - Process killer는 단일 실행 기능이 아니며 aggressive 종료 도구를 .NET 사양으로 옮기지 않는다.
 - Source 실행법·의존 버전·fresh profile 재현은 M4에서 고정한다. 위 target 경로만으로 새 .NET 구조를 구현하지 않는다.

@@ -2,7 +2,7 @@
 
 ## Executive verdict
 
-**Geometry·DPI·widget persistence에 이어 M1 시간표 내용·교시 경계의 characterization을 완료했다. 전체 앱의 Golden Reference 확정에는 M2–M4, 세 개의 행동 검증 묶음이 남아 있다.** 세 개의 구현 결함을 고쳐야 한다는 뜻은 아니다. 필요한 것은 남은 사용자 동작의 명세와 재현 가능한 증거이며, 참조 사용을 막는 결함만 최소 수정 대상으로 삼는다. 근거 없는 완료 퍼센트는 사용하지 않는다.
+**Geometry·DPI·widget persistence, M1 시간표에 이어 M2 Settings / appearance도 COMPLETE / CHARACTERIZED다. 전체 Golden Reference 확정에는 M3 Data lifecycle / M4 Windows reference runbook 두 묶음이 남아 있다.** 두 개의 구현 결함을 고쳐야 한다는 뜻은 아니다. 필요한 것은 남은 사용자 동작의 명세와 재현 가능한 증거이며, 참조 사용을 막는 결함만 최소 수정 대상으로 삼는다. 근거 없는 완료 퍼센트는 사용하지 않는다.
 
 초기 문서 감사 기준은 `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`였다. M1 후속 작업은 2026-09-07 `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` 및 clean에서 시작했다. Production은 변경하지 않고 전용 contract와 [M1 명세](TIMETABLE-BEHAVIOR-SPEC.md)를 추가했다. 기존 95 passed의 역사적 기록과 이번 실행 결과는 [상태 문서](LEGACY-RECOVERY-STATUS.md)에서 구분한다.
 
@@ -38,7 +38,7 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 | Resize / minimum / HFW | V | font minimum, actual/preferred, drag settle, Windows 결과 | 유지 |
 | DPI / multi-monitor | V, 범위 제한 | 96↔120 DPI Windows 왕복, margin/hint/HFW 복귀. 모든 모니터 구성을 보장하지 않음 | 유지 |
 | Hide/show geometry | V | signal 재연결 테스트와 settings size의 Windows hide/show | tray 입력 자체는 M4 |
-| Transparency/background | P | WA_TranslucentBackground, RGBA/QSS, 네 가지 opacity. 설정 변경별 비교 이미지 부족 | MUST M2 |
+| Transparency/background | V, M2 범위 | RGBA/QSS 네 opacity 대표값·signal rollback characterization | M2 COMPLETE; 모든 native compositor 조합 보장 아님 |
 | Always-on-top / window flags | P | **main widget은 WindowStaysOnBottomHint + Tool + FramelessWindowHint**. always-on-top toggle 없음. 주요 dialog는 top hint | MUST M4에서 실제 겹침 확인 |
 | Drag move / resize / lock | P, 저장 부분 V | 오른쪽 아래 20px resize, lock 상태에서도 resize 허용. lock 조작의 전체 Windows 계약 부족 | MUST M4 |
 
@@ -46,18 +46,18 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 
 | Feature | Status | 현재 증거 / 부족한 증거 | .NET 전 처리 |
 | --- | --- | --- | --- |
-| Font / font size | P | header/body 개별 font, 이전 font fallback, preview. minimum은 V지만 Cancel/재시작 전체는 미검증 | MUST M2 |
-| Colors / theme | P / K4 | 두 색상의 저장 테스트. light/dark 선택은 즉시 disk 저장, Cancel은 disk를 복원하지 않음 | MUST M2 |
-| Opacity | P | UI 0–100에서 저장값 0–255로 정수 변환, 네 종류. 반올림·취소 의미 미검증 | MUST M2 |
+| Font / font size | V, M2 | Preview/Cancel/Apply/restart, clipping native 기록 | M2 COMPLETE / CHARACTERIZED |
+| Colors / theme | V / K4 | Preview와 theme whole-style 즉시 저장, Cancel/restart 확인 | M2 COMPLETE; quirk REDESIGN |
+| Opacity | V, M2 | 50%→127 및 rollback 재진입 [119,124,124,124] 대표 contract | M2 COMPLETE; REDESIGN |
 | Widget size | V | settings→user request→acceptable actual 저장, hide/show, DPI 왕복 | 유지 |
 | Timetable content | V / KNOWN QUIRK | Save/Cancel/close·native X·재실행 확인. merge 손실·마지막 span/분할 예외 고정 | M1 COMPLETE |
 | Time/period settings | V, M1 범위 | 7교시 HH:mm, Save/Cancel/close·즉시 재계산. native typing 한계는 명세에 기록 | M1 COMPLETE |
-| Reset/default | P / K5 | Config 기본값, 전체 factory reset UI 없음. 위치 reset은 manager 값 변경, Apply에 move 없음 | MUST M2 |
+| Reset/default | V / K5 | memory target·파일·실제 위치 및 Cancel/Apply 경계 확인; factory reset 없음 | M2 COMPLETE; REDESIGN |
 | Backup/restore UI | P | manager flush/명시적 이름은 V. 5파일 복사, UI는 재시작 안내. 전체 GUI 계약 부족 | MUST M3 |
 | Widget settings | V | position/size/lock/screen_info/autostart, missing/corrupt JSON, snapshot/flush | 유지 |
 | Timetable persistence | V, M1 범위 | 내용 왕복·누락·malformed·wrong-schema 표시 결과 계약 | M1 COMPLETE; backup/import는 M3 |
 | Period/time persistence | V, M1 범위 | 기본값·reload·부분 적용·invalid QTime 계약 | M1 COMPLETE; backup/import는 M3 |
-| Style persistence | P | 두 색상의 저장/로드만 V, 나머지 field 및 transaction 부족 | MUST M2/M3 |
+| Style persistence | V, M2 정상 경로 | Preview/Apply/OK/Cancel/theme/restart 계약 | M2 COMPLETE; backup/malformed lifecycle M3 |
 | Notification persistence | P | 별도 NotificationManager의 3값 read/write. SettingsManager의 같은 이름 초기값과 별개 | MUST M3 |
 | Debounce / atomic write | V, widget만 | 250ms coalescing, 같은 디렉터리 replace, 실패 시 기존 파일 보존 | 유지 |
 | Atomic all-data / transactional backup | O | 나머지 JSON은 직접 write, backup은 개별 copy | SHOULD document, 전체 재설계 SKIP |
@@ -93,7 +93,7 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 
 ## Partially verified areas
 
-M1 시간표 내용·시각 경계는 전용 계약과 native 기록으로 완료했다. style Preview/Apply/Cancel, 전체 backup, native tray/flags/autostart, fresh startup과 import/share는 P다. 남은 증거는 M2–M4 또는 document-only로 연결했다. 이미 완료된 Windows geometry 검증을 무조건 반복하지 않고 아직 관찰하지 않은 입력과 결과를 기록한다.
+M1과 M2는 전용 계약·명세·native 기록으로 완료했다. 전체 backup, native tray/flags/autostart, fresh startup과 import/share는 P다. 남은 증거는 M3/M4 또는 document-only로 연결했다. 이미 완료된 Windows geometry 검증을 무조건 반복하지 않고 아직 관찰하지 않은 입력과 결과를 기록한다.
 
 ## Known broken areas
 
@@ -104,8 +104,8 @@ M1 시간표 내용·시각 경계는 전용 계약과 native 기록으로 완�
 | K1 | running 1.0.0 / release v1.0.1 비교가 True | 인계된 version mismatch, updater B |
 | K2 | download 성공 분기가 TEMP Popen이며 원래 path를 교체하지 않음 | VERIFIED source absence, self-update 완료로 부르지 않음 |
 | K3 | Widget.update_current_period가 prev_period 변경 시에만 notification check. 기본 시각 09:55는 current_period=None이므로 10:00의 2교시 예고를 평가하지 못함 | VERIFIED M1 callback fixture: 09:55 호출 없음. 실제 toast는 M4, .NET REDESIGN |
-| K4 | ThemeSelector.select_theme→change_theme가 style JSON 저장, SettingsDialog.reject는 초기 style의 memory만 복원 | INFERRED: theme 변경→Cancel 후 disk는 원복되지 않아 재시작 시 선택 theme가 남을 수 있음. Apply 후 Cancel도 초기 snapshot 사용. M2에서 관찰 |
-| K5 | reset_widget_position은 manager.position=(100,100), Apply는 저장하지만 widget.move를 호출하지 않음 | INFERRED: 위치 reset이 즉시 화면에 반영되지 않음. 재시작·size 변경 동시 적용 결과를 M2에서 기록 |
+| K4 | ThemeSelector.select_theme→change_theme가 style JSON 저장, SettingsDialog.reject는 초기 style의 memory만 복원 | VERIFIED M2: theme→Cancel→restart에서 저장 theme 복원; Apply18→Preview24→Cancel visual10/file18. [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), REDESIGN |
+| K5 | reset_widget_position은 manager.position=(100,100), Apply는 저장하지만 widget.move를 호출하지 않음 | VERIFIED M2: target100,100, 즉시 move 없음, Cancel target 유지, 같은 크기 Apply persistence. 다중 모니터 M4; REDESIGN |
 | K6 | exceptions.handle_exception의 QApplication 없는 경로가 logger.error에 지원하지 않는 file=sys.stderr 인자를 전달하고 except에서도 반복 | INFERRED: 해당 예외 보고 경로가 TypeError로 실패할 수 있음. document-only, 정상 reference 시작을 막을 때만 최소 수리 |
 
 M1에서 확인한 KNOWN QUIRKS: `A,A,B` open/save→`A,A,A`, 수동 merge의 다음 셀 overwrite, 6~7 동일 span=3/1~7 동일 span=8 및 split AttributeError, 빈 셀 뒤 병합 누락. 전용 legacy tests와 명세 L1–L5에 고정했다. stale-date 강조, invalid time matching, QLabel AutoText도 명세에 기록하며 .NET 필수 재현 대상이 아니다.
@@ -123,11 +123,11 @@ backup restore는 notification JSON을 복사하지만 NotificationManager를 re
 | Item | Why required | Evidence needed | Estimated scope |
 | --- | --- | --- | --- |
 | M1 Core content / clock | COMPLETE / CHARACTERIZED | [명세](TIMETABLE-BEHAVIOR-SPEC.md), 전용 contracts, native IME/X/typing/render 기록 | 완료; legacy quirk는 REDESIGN |
-| M2 Settings / appearance | Preview/Apply/OK/Cancel의 의미와 실제 모양이 비교 기준 | header/body font, 크기, light/dark/custom, 네 opacity 대표값. Preview→Cancel, Apply→Cancel, restart, 위치 reset의 memory/disk/screenshot 비교. K4/K5의 채택 사양 결정 | 0.5–1일, 조작표와 제한된 contract |
+| M2 Settings / appearance | COMPLETE / CHARACTERIZED | [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), [전용 contracts](../src/utils/test_settings_behavior_contracts.py), native X/rollback/restart/render 기록 | 완료; quirks는 REDESIGN |
 | M3 Data lifecycle | 사용자 데이터의 이식 형식과 restore 결과 필요 | 5 JSON의 비식별 예시, fresh/missing/corrupt 입력, backup→변경→restore→restart, notification/geometry 적용 시점. QR/JSON payload 한 쌍 decode/import 결과 | 0.5–1일, isolated profile 왕복 |
 | M4 Windows reference runbook | 다른 PC에서 비교 실행하고 native 동작을 오인하지 않음 | Python/Qt/OS/dependency 버전·source 실행법. fresh/existing profile, flags/겹침/taskbar, lock/drag, tray toggle/show/exit·context exit, autostart on/off/재로그인, notification 표시, 두 번째 실행, 사라진 monitor에서 startup. 기존 DPI 결과 재사용 | 0.5–1일 및 재로그인, native smoke/runbook |
 
-M1은 완료했고 남은 M2–M4는 미지의 동작을 전부 승인하지 않기 위한 gate다. 이미 알려진 버그는 재현 예시와 이식 시 채택/수정 방침을 기록하면 닫을 수 있다. 정상 참조 실행이나 데이터 비교를 막는 것만 별도 최소 수리한다. Python updater나 notification을 전면 재작성할 필요는 없다.
+M1/M2는 완료했고 남은 M3/M4는 미지의 동작을 전부 승인하지 않기 위한 gate다. 이미 알려진 버그는 재현 예시와 이식 시 채택/수정 방침을 기록하면 닫을 수 있다. 정상 참조 실행이나 데이터 비교를 막는 것만 별도 최소 수리한다. Python updater나 notification을 전면 재작성할 필요는 없다.
 
 ## Document only
 
@@ -184,7 +184,7 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 - [x] Baseline hash·lineage·5 recovery commits·기존 95 passed의 출처를 문서에 고정.
 - [x] Windows DPI/layout 실측 및 source-DPI/QSS/native warning 한계 기록.
 - [x] M1: content/clock 전용 contract·명세·native 표시 기록 완료. 마지막 span/예고는 quirk로 확정, 비차단 typing unknown 명시.
-- [ ] M2: Preview/Apply/OK/Cancel/restart/reset 조작표와 대표 이미지, K4/K5 처리 방침 결정.
+- [x] M2 COMPLETE / CHARACTERIZED: 5-state 명세·전용 contracts·native 관찰 기록, K4/K5 및 signal/geometry quirks REDESIGN. 원본 이미지는 TEMP 기록으로 한정.
 - [ ] M3: 5 JSON·backup/import 왕복과 복원 시점 기록, 이식 입력 명세 확정.
 - [ ] M4: native Windows smoke와 다른 환경에서도 쓸 수 있는 source 실행 runbook 기록.
 - [ ] 각 미검증 항목을 verified 또는 명시적 document-only/skip으로 옮기고 참조 비교를 막는 결함 해소.
@@ -195,8 +195,12 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 
 ## Recommended next task
 
-**다음 한 작업은 M2 Settings / appearance characterization이다.** Preview→Cancel, Apply→Cancel, restart를 격리 profile에서 비교하고 K4 theme persistence/K5 위치 reset의 채택 사양을 정한다. 배경 자동 검사를 우선하며 native 입력은 필요한 범위만 분리한다.
+**다음 milestone은 M3 Data lifecycle characterization이다.** 격리 profile에서 5 JSON과 backup/restore/import/restart 경계를 기록한다. 실제 autostart·알림·Windows runbook은 M4로 유지한다.
 
 ## M1 documentation and contract validation
 
 변경은 새 M1 명세, 기존 docs 3개, 전용 test module과 기존 DPI test 하나의 clock 고정이다. Production/build/config는 변경하지 않는다. 강조 border의 HFW +2px는 legacy visual/layout interaction이며 .NET REDESIGN이다. 실제 결과는 상태 문서의 M1 validation에 기록한다. commit/push/PR은 하지 않는다.
+
+## M2 documentation and contract validation
+
+기준 HEAD `da21ece624985dfa2b60be9cfc0c2043c440e242`와 clean에서 시작했다. 변경은 설정 명세, 기존 docs 3개, 전용 M2 test module뿐이다. Production 무변경. 실행 결과는 [상태 문서](LEGACY-RECOVERY-STATUS.md)의 M2 기록을 따른다.

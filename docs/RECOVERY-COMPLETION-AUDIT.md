@@ -2,7 +2,7 @@
 
 ## Executive verdict
 
-**Geometry·DPI·widget persistence, M1 시간표에 이어 M2 Settings / appearance도 COMPLETE / CHARACTERIZED다. 전체 Golden Reference 확정에는 M3 Data lifecycle / M4 Windows reference runbook 두 묶음이 남아 있다.** 두 개의 구현 결함을 고쳐야 한다는 뜻은 아니다. 필요한 것은 남은 사용자 동작의 명세와 재현 가능한 증거이며, 참조 사용을 막는 결함만 최소 수정 대상으로 삼는다. 근거 없는 완료 퍼센트는 사용하지 않는다.
+**Geometry·DPI·widget persistence, M1 시간표, M2 Settings / appearance, M3 Data lifecycle이 COMPLETE / CHARACTERIZED다. 남은 MUST는 M4 Windows reference runbook 하나다.** 알려진 M3 quirks의 Python 수리를 완료 조건으로 추가한 것은 아니다. 필요한 것은 남은 사용자 동작의 명세와 재현 가능한 증거이며, 참조 사용을 막는 결함만 최소 수정 대상으로 삼는다. 근거 없는 완료 퍼센트는 사용하지 않는다.
 
 초기 문서 감사 기준은 `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`였다. M1 후속 작업은 2026-09-07 `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` 및 clean에서 시작했다. Production은 변경하지 않고 전용 contract와 [M1 명세](TIMETABLE-BEHAVIOR-SPEC.md)를 추가했다. 기존 95 passed의 역사적 기록과 이번 실행 결과는 [상태 문서](LEGACY-RECOVERY-STATUS.md)에서 구분한다.
 
@@ -53,15 +53,15 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 | Timetable content | V / KNOWN QUIRK | Save/Cancel/close·native X·재실행 확인. merge 손실·마지막 span/분할 예외 고정 | M1 COMPLETE |
 | Time/period settings | V, M1 범위 | 7교시 HH:mm, Save/Cancel/close·즉시 재계산. native typing 한계는 명세에 기록 | M1 COMPLETE |
 | Reset/default | V / K5 | memory target·파일·실제 위치 및 Cancel/Apply 경계 확인; factory reset 없음 | M2 COMPLETE; REDESIGN |
-| Backup/restore UI | P | manager flush/명시적 이름은 V. 5파일 복사, UI는 재시작 안내. 전체 GUI 계약 부족 | MUST M3 |
+| Backup/restore lifecycle | V, M3 범위 | [명세](DATA-LIFECYCLE-SPEC.md)·전용 contracts: 5파일 왕복, UI refresh/deferred state, partial/failure. native dialog 외관 미검증 | M3 COMPLETE / CHARACTERIZED |
 | Widget settings | V | position/size/lock/screen_info/autostart, missing/corrupt JSON, snapshot/flush | 유지 |
-| Timetable persistence | V, M1 범위 | 내용 왕복·누락·malformed·wrong-schema 표시 결과 계약 | M1 COMPLETE; backup/import는 M3 |
-| Period/time persistence | V, M1 범위 | 기본값·reload·부분 적용·invalid QTime 계약 | M1 COMPLETE; backup/import는 M3 |
-| Style persistence | V, M2 정상 경로 | Preview/Apply/OK/Cancel/theme/restart 계약 | M2 COMPLETE; backup/malformed lifecycle M3 |
-| Notification persistence | P | 별도 NotificationManager의 3값 read/write. SettingsManager의 같은 이름 초기값과 별개 | MUST M3 |
+| Timetable persistence | V, M1 범위 | 내용 왕복·누락·malformed·wrong-schema 표시 결과 계약 | M1 COMPLETE; backup/import M3 COMPLETE |
+| Period/time persistence | V, M1 범위 | 기본값·reload·부분 적용·invalid QTime 계약 | M1 COMPLETE; backup/import M3 COMPLETE |
+| Style persistence | V, M2 정상 경로 | Preview/Apply/OK/Cancel/theme/restart 계약 | M2 COMPLETE; backup/malformed lifecycle M3 COMPLETE |
+| Notification persistence | V, M3 범위 | 별도 manager 3값, restore 직후 B/restart A; SettingsManager의 동명 초기값과 별개 | M3 COMPLETE; 실제 전달 M4 |
 | Debounce / atomic write | V, widget만 | 250ms coalescing, 같은 디렉터리 replace, 실패 시 기존 파일 보존 | 유지 |
 | Atomic all-data / transactional backup | O | 나머지 JSON은 직접 write, backup은 개별 copy | SHOULD document, 전체 재설계 SKIP |
-| QR export / image-camera import / JSON import | P | Base64 UTF-8 JSON, PNG 저장, 선택 데이터 덮어쓰기. optional dependency 포함 전체 계약 없음 | payload는 M3, camera/decoder 수리는 SKIP |
+| QR/JSON sharing | V payload, image/camera P | production UTF-8/Base64 envelope 왕복, 선택 timetable replace/time merge 및 partial failure. image encoder/decoder는 미검증 | payload M3 COMPLETE; camera/decoder 수리 SKIP |
 
 ### Windows integration, update, build
 
@@ -93,7 +93,7 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 
 ## Partially verified areas
 
-M1과 M2는 전용 계약·명세·native 기록으로 완료했다. 전체 backup, native tray/flags/autostart, fresh startup과 import/share는 P다. 남은 증거는 M3/M4 또는 document-only로 연결했다. 이미 완료된 Windows geometry 검증을 무조건 반복하지 않고 아직 관찰하지 않은 입력과 결과를 기록한다.
+M1/M2는 전용 계약·명세·native 기록, M3는 source/TEMP Qt/subprocess 계약과 명세로 완료했다. native tray/flags/autostart, 전체 main startup은 M4다. 실제 QR image/camera decode 및 file picker/confirmation 외관은 M3 VERIFIED에 포함하지 않으며 document-only/skip 경계를 유지한다. 이미 완료된 Windows geometry 검증을 무조건 반복하지 않고 아직 관찰하지 않은 입력과 결과를 기록한다.
 
 ## Known broken areas
 
@@ -110,7 +110,7 @@ M1과 M2는 전용 계약·명세·native 기록으로 완료했다. 전체 back
 
 M1에서 확인한 KNOWN QUIRKS: `A,A,B` open/save→`A,A,A`, 수동 merge의 다음 셀 overwrite, 6~7 동일 span=3/1~7 동일 span=8 및 split AttributeError, 빈 셀 뒤 병합 누락. 전용 legacy tests와 명세 L1–L5에 고정했다. stale-date 강조, invalid time matching, QLabel AutoText도 명세에 기록하며 .NET 필수 재현 대상이 아니다.
 
-backup restore는 notification JSON을 복사하지만 NotificationManager를 reload하지 않는다. UI가 재시작을 안내하므로 즉시 전체 설정 적용을 원래 계약이라고 가정하지 않는다. M3에서 재시작 후 결과까지 기록한다. 손상된 style JSON은 backup 후 DataError를 발생시키므로, 메시지의 “기본값 복원”만 보고 정상 startup이 계속된다고 판단하지 않는다.
+M3는 [명세](DATA-LIFECYCLE-SPEC.md)와 [전용 contracts](../src/utils/test_data_lifecycle_contracts.py)로 disk replace/runtime merge, geometry·notification의 restart 적용, 부분 copy 실패와 rollback 부재를 고정했다. manager 250ms pending은 보호되지만 Widget 40ms pending은 restore 뒤 새로운 save로 geometry를 덮어쓸 수 있다. malformed style은 copy 이후 reload 또는 초기 manager 생성을 중단할 수 있다. 모두 LEGACY QUIRK / .NET REDESIGN이며 production은 수정하지 않았다.
 
 ## Release-only / uncertain areas
 
@@ -124,10 +124,10 @@ backup restore는 notification JSON을 복사하지만 NotificationManager를 re
 | --- | --- | --- | --- |
 | M1 Core content / clock | COMPLETE / CHARACTERIZED | [명세](TIMETABLE-BEHAVIOR-SPEC.md), 전용 contracts, native IME/X/typing/render 기록 | 완료; legacy quirk는 REDESIGN |
 | M2 Settings / appearance | COMPLETE / CHARACTERIZED | [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), [전용 contracts](../src/utils/test_settings_behavior_contracts.py), native X/rollback/restart/render 기록 | 완료; quirks는 REDESIGN |
-| M3 Data lifecycle | 사용자 데이터의 이식 형식과 restore 결과 필요 | 5 JSON의 비식별 예시, fresh/missing/corrupt 입력, backup→변경→restore→restart, notification/geometry 적용 시점. QR/JSON payload 한 쌍 decode/import 결과 | 0.5–1일, isolated profile 왕복 |
+| M3 Data lifecycle | COMPLETE / CHARACTERIZED | [명세](DATA-LIFECYCLE-SPEC.md), [22 contracts](../src/utils/test_data_lifecycle_contracts.py), source/TEMP Qt 및 restart evidence. full profile·pending·partial/failure·sharing payload | 완료; quirks REDESIGN, native 과장 없음 |
 | M4 Windows reference runbook | 다른 PC에서 비교 실행하고 native 동작을 오인하지 않음 | Python/Qt/OS/dependency 버전·source 실행법. fresh/existing profile, flags/겹침/taskbar, lock/drag, tray toggle/show/exit·context exit, autostart on/off/재로그인, notification 표시, 두 번째 실행, 사라진 monitor에서 startup. 기존 DPI 결과 재사용 | 0.5–1일 및 재로그인, native smoke/runbook |
 
-M1/M2는 완료했고 남은 M3/M4는 미지의 동작을 전부 승인하지 않기 위한 gate다. 이미 알려진 버그는 재현 예시와 이식 시 채택/수정 방침을 기록하면 닫을 수 있다. 정상 참조 실행이나 데이터 비교를 막는 것만 별도 최소 수리한다. Python updater나 notification을 전면 재작성할 필요는 없다.
+M1/M2/M3는 완료했고 남은 MUST gate는 M4 하나다. 이미 알려진 버그는 재현 예시와 이식 시 채택/수정 방침을 기록하면 닫을 수 있다. 정상 참조 실행이나 데이터 비교를 막는 것만 별도 최소 수리한다. Python updater나 notification을 전면 재작성할 필요는 없다.
 
 ## Document only
 
@@ -185,7 +185,7 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 - [x] Windows DPI/layout 실측 및 source-DPI/QSS/native warning 한계 기록.
 - [x] M1: content/clock 전용 contract·명세·native 표시 기록 완료. 마지막 span/예고는 quirk로 확정, 비차단 typing unknown 명시.
 - [x] M2 COMPLETE / CHARACTERIZED: 5-state 명세·전용 contracts·native 관찰 기록, K4/K5 및 signal/geometry quirks REDESIGN. 원본 이미지는 TEMP 기록으로 한정.
-- [ ] M3: 5 JSON·backup/import 왕복과 복원 시점 기록, 이식 입력 명세 확정.
+- [x] M3 COMPLETE / CHARACTERIZED: 5 JSON·backup/import·pending·partial/failure·restart를 명세와 22 contracts로 고정. native file picker/QR scan/full main startup은 완료 주장하지 않음.
 - [ ] M4: native Windows smoke와 다른 환경에서도 쓸 수 있는 source 실행 runbook 기록.
 - [ ] 각 미검증 항목을 verified 또는 명시적 document-only/skip으로 옮기고 참조 비교를 막는 결함 해소.
 - [ ] 후속 구현 변경이 있으면 대상 contract와 full suite 통과, DPI/layout 변경이면 Windows 결과도 갱신.
@@ -195,7 +195,7 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 
 ## Recommended next task
 
-**다음 milestone은 M3 Data lifecycle characterization이다.** 격리 profile에서 5 JSON과 backup/restore/import/restart 경계를 기록한다. 실제 autostart·알림·Windows runbook은 M4로 유지한다.
+**다음 작업은 M4 Windows reference runbook이다.** source 실행 환경과 격리 profile 절차를 고정하고, 기존 DPI/native evidence를 재사용하며 아직 필요한 Windows smoke 범위만 검증한다.
 
 ## M1 documentation and contract validation
 
@@ -204,3 +204,11 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 ## M2 documentation and contract validation
 
 기준 HEAD `da21ece624985dfa2b60be9cfc0c2043c440e242`와 clean에서 시작했다. 변경은 설정 명세, 기존 docs 3개, 전용 M2 test module뿐이다. Production 무변경. 실행 결과는 [상태 문서](LEGACY-RECOVERY-STATUS.md)의 M2 기록을 따른다.
+
+## M3 documentation and contract validation
+
+기준 HEAD `b966f464167b6cded02dc88cfb2ae0d878770a4a`와 clean에서 시작했다.
+변경은 [새 M3 명세](DATA-LIFECYCLE-SPEC.md), 기존 docs 3개, 전용 22-case module이다.
+Production/기존 7 backup contracts는 그대로 유지하며 핵심 profile/UI/failure 관계를 추가했다.
+실행 결과와 재현 환경은 [상태 문서](LEGACY-RECOVERY-STATUS.md)의 M3 기록을 따른다.
+M3 COMPLETE / CHARACTERIZED, 남은 MUST는 M4 하나다. native file picker/QR scan/full main startup 완료를 뜻하지 않는다.

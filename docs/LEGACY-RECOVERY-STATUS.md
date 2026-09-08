@@ -8,6 +8,9 @@ reliable reference implementation을 재구성하는 브랜치다. 실제 v1.0.1
 byte-for-byte 복원한 브랜치가 아니다. .NET 재작성 시 기능·디자인·설정·Windows
 동작을 비교하는 Golden Reference가 목적이며, Python 제품의 전면 개선이 목적은 아니다.
 
+현재 M1/M2에 이어 M3도 **COMPLETE / CHARACTERIZED**다. 남은 MUST는 **M4 Windows reference runbook** 하나다.
+[데이터 수명주기 명세](DATA-LIFECYCLE-SPEC.md)와 아래 M3 검증 기록을 참조한다.
+
 이 문서는 검증된 복구 상태를 고정한다. 전체 기능의 잔여 검증과 종료 판정은
 [Recovery Completion Audit](RECOVERY-COMPLETION-AUDIT.md), 데이터와 소스의 이식 대응은
 [Feature Map](FEATURE-MAP.md)을 참조한다.
@@ -89,10 +92,11 @@ updater 및 배포 문제는 geometry recovery의 성공 여부와 별도로 관
 옵션을 함께 보존한다. 같은 디렉터리의 임시 JSON을 완성하고 flush/fsync 후 `os.replace`한다.
 교체 실패 시 기존 파일과 pending snapshot을 유지하며 명시적인 flush가 가능하다.
 
-백업 생성·복원은 먼저 pending widget settings를 flush한다. flush 실패 시 작업을 중단하여
+백업 생성·복원은 먼저 SettingsManager에 도달한 pending widget snapshot을 flush한다. flush 실패 시 작업을 중단하여
 낡은 snapshot이 복원 데이터를 덮어쓰는 것을 막는다. 명시적 백업 이름과 자동 이름 모두
 계약이 있다. **시간표·교시·스타일·알림 파일까지 atomic하다는 뜻은 아니다.** 백업 전체도
-여러 파일의 단일 transaction은 아니다.
+여러 파일의 단일 transaction은 아니다. Widget의 40ms 확정 이전 intent는 별도 경계이며,
+복원 뒤 새 save를 만들어 geometry를 덮어쓸 수 있다. [M3 pending 계약](DATA-LIFECYCLE-SPEC.md)을 따른다.
 
 ### Minimum timetable sizing
 
@@ -207,7 +211,7 @@ M1 pollution이 아니라 강조 border 1→2px에 따른 HFW +2px였다. 해당
 
 M1 완료는 알려진 결함을 수리했다는 뜻이 아니다. .NET의 destructive merge, validation,
 scheduler, AutoText, 저장 실패 UX는 REDESIGN 대상이다. M1 당시 남은 MUST 묶음은 M2 Settings,
-M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2 완료 후 M3/M4만 남는다. 전체 recovery 종료와 구분한다.
+M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2/M3 완료 후 M4만 남는다. 전체 recovery 종료와 구분한다.
 
 ## Known limitations
 
@@ -220,7 +224,7 @@ M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2 �
 - **Native geometry warnings.** 사용자 drag/native monitor transition 중 일부
   `QWindowsWindow::setGeometry` warning은 있을 수 있다. 검증된 deferred correction loop는 없고,
   deferred normalization warning 0과 전체 native warning 0을 혼동하지 않는다.
-- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. M2 appearance는 아래 범위에서 완료했다. backup/import, tray/autostart/알림, update/build는 감사 문서에서 별도로 판정한다.
+- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. M2 appearance는 아래 범위에서 완료했다. backup/import lifecycle은 M3에서 완료했다. tray/autostart/알림 전달, update/build는 감사 문서에서 별도로 판정한다.
 
 ## Golden Reference rules
 
@@ -273,6 +277,56 @@ owned timer settle로 정정했다. Production 수정이나 host clock 변경은
 문서 상대 링크 80개와 git diff --check 통과. 테스트는 semantic JSON/실제 controls/QSS/geometry를
 검사하며 native X와 platform pixel 수치를 자동화했다고 주장하지 않는다. M2 commit-ready다.
 
-남은 MUST는 **M3 Data lifecycle / M4 Windows reference runbook**, 두 묶음이다.
+M2 완료 당시 남은 MUST는 M3/M4 두 묶음이었다. 현재 상태는 아래 M3 완료 기록을 따른다.
 실제 autostart/notification delivery·backup/import가 M2와 함께 완료됐다는 뜻은 아니다.
 이번 변경은 docs 4개와 신규 test module 하나이며 production 무변경, commit/push/PR 미실행.
+
+## M3 completion and validation
+
+2026-09-08, `recovery-v1-release` / `b966f464167b6cded02dc88cfb2ae0d878770a4a` 및
+clean working tree에서 시작했다. M3 **COMPLETE / CHARACTERIZED**.
+[Data Lifecycle Specification](DATA-LIFECYCLE-SPEC.md)과
+[전용 M3 module](../src/utils/test_data_lifecycle_contracts.py)에 5 JSON, save strategy,
+backup snapshot, disk replace/runtime merge, UI refresh/restart, pending, partial/failure,
+JSON/QR sharing payload를 고정했다. 현재 남은 MUST는 **M4 Windows reference runbook** 하나다.
+
+manager 250ms pending은 flush로 보호되지만 Widget 40ms 확정 이전 intent는 restore 뒤 새 저장으로
+geometry를 덮어쓸 수 있다. 복원 UI는 timetable/time/style을 갱신하지만 geometry actual/preferred와
+NotificationManager는 이전 값이 남는다. 정상 full restore 후 별도 process는 persisted A를 load한다.
+partial JSON은 기존 memory/defaults와 섞이고 copy failure는 rollback하지 않는다.
+이들은 LEGACY QUIRK / .NET REDESIGN이며 production을 수정하지 않았다.
+
+Evidence는 source, 선행 TEMP Qt characterization/정상 종료 후 새 Widget process와 이번 automated contracts다.
+새 tests의 subprocess는 manager 5 data classes reload이며 full main/tray/native Widget startup은 아니다.
+Widget pending test는 실제 Qt event handlers와 owned timer callback을 순서대로 실행하여 causal relation을
+검사한다. exact 40ms latency나 OS 마우스 입력을 검사하지 않는다. 절대 pixel 기대값 대신 A/B geometry 관계를 사용한다.
+
+QR encoder 입구의 production payload를 캡처하고 실제 Base64 decode/import한다. optional image dependency만
+test-local stub하여 원래 serializer/import를 실행하며, QR image encoding/scan은 검증하지 않는다.
+실제 file picker/confirmation appearance, camera/image decoder, OS autostart/notification delivery는 미검증으로 유지한다.
+기존 M1/M2 명세의 잔여 milestone 표현은 당시 기록이며 현재 gate는 이 절과 최신 감사 문서를 따른다.
+
+실행 interpreter: `C:\CodexVenvs\school-timetable-widget-py312\Scripts\python.exe`.
+Python 3.12.14 / PyQt 5.15.11 / Qt 5.15.2, `QT_QPA_PLATFORM=offscreen`, `PYTHONDONTWRITEBYTECODE=1`,
+`PYTHONPATH=<repository>/src`, `-B -m pytest ... -q -p no:cacheprovider --basetemp <unique TEMP>`.
+새 module은 test별 TEMP, singleton/environment monkeypatch, QApplication font/style 보존,
+Widget/dialog/timer cleanup과 bounded subprocess를 사용한다. 기존 7 backup tests는 수정·복제하지 않았다.
+
+| Run | Result |
+| --- | --- |
+| M3 focused | **22 passed**, 2.12s |
+| Existing backup/recovery modules | **95 passed**, 32.16s (기존 backup 7개 포함) |
+| M1 focused | **95 passed**, 1.31s |
+| M2 focused | **14 passed**, 8.09s |
+| Full pytest 1 | **226 passed**, 41.44s |
+| Full pytest 2 | **226 passed**, 41.21s |
+
+여섯 실행 모두 pytest warning/failure 없이 통과했다. 최종 count는 기존204 + M3 22 = **226**.
+두 full run은 같은 count이며 skip도 없다. 초기 focused 성공 후 subprocess의 style file read를
+context manager로 정리했고 최종 두 full run이 이를 포함한다. behavior/기대값 변경은 없었다.
+문서 상대 링크 97개, 신규 파일 포함 공백 검사 및 `git diff --check` 통과.
+Production Python 26개 SHA-256과 기존 tests 무변경, 원본 profile 5개 SHA-256/mtime는 선행
+characterization 기준과 동일함을 확인했다. M3 **commit-ready**이며 남은 MUST는 M4 하나다.
+
+이번 변경은 docs 4개와 신규 M3 test module 하나다. Production 및 기존 tests는 무변경이며
+commit/push/PR은 실행하지 않았다. M3 완료는 전체 Golden Reference 종료나 legacy bug 수리를 의미하지 않는다.

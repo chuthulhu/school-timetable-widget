@@ -2,11 +2,15 @@
 
 ## Executive verdict
 
-**Geometry·DPI·widget persistence, M1 시간표, M2 Settings / appearance, M3 Data lifecycle이 COMPLETE / CHARACTERIZED다. 남은 MUST는 M4 Windows reference runbook 하나다.** 알려진 M3 quirks의 Python 수리를 완료 조건으로 추가한 것은 아니다. 필요한 것은 남은 사용자 동작의 명세와 재현 가능한 증거이며, 참조 사용을 막는 결함만 최소 수정 대상으로 삼는다. 근거 없는 완료 퍼센트는 사용하지 않는다.
+**Geometry·DPI·widget persistence와 M1/M2/M3/M4 COMPLETE / CHARACTERIZED. 남은 MUST 0.
+Legacy recovery: COMPLETE AS GOLDEN REFERENCE.** 이는 **reconstructed and characterized Golden Reference**이며
+exact deployed v1.0.1 source recovered 선언이 아니다. [Windows Reference Runbook](WINDOWS-REFERENCE-RUNBOOK.md)에
+재현 명령, native tray/종료 증거, unmodified main의 외부 효과와 미검증 범위의 disposition을 고정했다.
+알려진 Python quirks 수리는 완료 조건으로 추가하지 않았다. 아래 과거 단계 기록과 최신 M4 판정을 구분한다.
 
 초기 문서 감사 기준은 `recovery-v1-release` / `7a27e4192a0b6d13a9d18a193b1770b6abb58c2c`였다. M1 후속 작업은 2026-09-07 `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` 및 clean에서 시작했다. Production은 변경하지 않고 전용 contract와 [M1 명세](TIMETABLE-BEHAVIOR-SPEC.md)를 추가했다. 기존 95 passed의 역사적 기록과 이번 실행 결과는 [상태 문서](LEGACY-RECOVERY-STATUS.md)에서 구분한다.
 
-**RECOMMENDED:** updater는 **B — 동작을 문서화하고 .NET에서 대체**, build/release는 **B — local/reference execution을 확보하고 release pipeline은 .NET에서 구축**한다. 다른 PC에서도 사용할 수 있는 실행 환경·데이터 준비 절차는 필요하지만, legacy EXE 재배포나 byte-identical build는 종료 조건으로 두지 않는다.
+**M4 disposition 채택:** updater는 **B — 동작을 문서화하고 .NET에서 대체**, build/release는 **B — local/reference execution을 확보하고 release pipeline은 .NET에서 구축**한다. 실행 환경·데이터 준비 절차를 runbook에 기록했으며, legacy EXE 재배포나 byte-identical build는 종료 조건으로 두지 않는다. Source baseline은 `recovery-v1-release` / `07eaa43de6f55a0d4ba21fb74482dbf539b3636d`; M4 문서는 그 위의 미커밋 변경이다.
 
 ## Evidence and audit coverage
 
@@ -34,13 +38,13 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 | --- | --- | --- | --- |
 | Timetable rendering | V, M1 범위 | 35셀 내용 왕복·공백·한글·multiline, native 대표 render 기록 | M1 COMPLETE |
 | Current-period highlight | V / KNOWN QUIRK | 42개 초 경계 및 +1ms, 순서·주말·빈 셀, stale-date quirk 계약 | M1 COMPLETE, quirk는 REDESIGN |
-| Position persistence / clamp | V, 범위 제한 | JSON 왕복, 음수 좌표 clamp, move 직후 cleanup의 기존 Windows 결과 | 유지, 사라진 화면에서 startup은 M4 |
+| Position persistence / clamp | V, 범위 제한 | JSON 왕복, 음수 좌표 clamp, 기존 Windows 및 M4 위치 재시작 확인 | 사라진 화면 startup은 source/document-only |
 | Resize / minimum / HFW | V | font minimum, actual/preferred, drag settle, Windows 결과 | 유지 |
 | DPI / multi-monitor | V, 범위 제한 | 96↔120 DPI Windows 왕복, margin/hint/HFW 복귀. 모든 모니터 구성을 보장하지 않음 | 유지 |
-| Hide/show geometry | V | signal 재연결 테스트와 settings size의 Windows hide/show | tray 입력 자체는 M4 |
+| Hide/show geometry | V | 기존 geometry 및 M4 native tray toggle/show 확인 | 유지 |
 | Transparency/background | V, M2 범위 | RGBA/QSS 네 opacity 대표값·signal rollback characterization | M2 COMPLETE; 모든 native compositor 조합 보장 아님 |
-| Always-on-top / window flags | P | **main widget은 WindowStaysOnBottomHint + Tool + FramelessWindowHint**. always-on-top toggle 없음. 주요 dialog는 top hint | MUST M4에서 실제 겹침 확인 |
-| Drag move / resize / lock | P, 저장 부분 V | 오른쪽 아래 20px resize, lock 상태에서도 resize 허용. lock 조작의 전체 Windows 계약 부족 | MUST M4 |
+| Always-on-top / window flags | P, source-confirmed | **main widget은 WindowStaysOnBottomHint + Tool + FramelessWindowHint**. M4도 원래 flags 유지. always-on-top toggle 없음. 주요 dialog는 top hint | overlap/taskbar 전체 native matrix는 document-only |
+| Drag move / resize / lock | P, 저장 부분 V | M4 native resize 및 위치/geometry 복원 확인. 오른쪽 아래20px resize, lock에서도 resize 허용은 소스 확인 | lock native matrix는 document-only |
 
 ### Settings and data
 
@@ -58,7 +62,7 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 | Timetable persistence | V, M1 범위 | 내용 왕복·누락·malformed·wrong-schema 표시 결과 계약 | M1 COMPLETE; backup/import M3 COMPLETE |
 | Period/time persistence | V, M1 범위 | 기본값·reload·부분 적용·invalid QTime 계약 | M1 COMPLETE; backup/import M3 COMPLETE |
 | Style persistence | V, M2 정상 경로 | Preview/Apply/OK/Cancel/theme/restart 계약 | M2 COMPLETE; backup/malformed lifecycle M3 COMPLETE |
-| Notification persistence | V, M3 범위 | 별도 manager 3값, restore 직후 B/restart A; SettingsManager의 동명 초기값과 별개 | M3 COMPLETE; 실제 전달 M4 |
+| Notification persistence | V, M3 범위 | 별도 manager 3값, restore 직후 B/restart A; SettingsManager의 동명 초기값과 별개 | M3 COMPLETE; M4 delivery는 document-only |
 | Debounce / atomic write | V, widget만 | 250ms coalescing, 같은 디렉터리 replace, 실패 시 기존 파일 보존 | 유지 |
 | Atomic all-data / transactional backup | O | 나머지 JSON은 직접 write, backup은 개별 copy | SHOULD document, 전체 재설계 SKIP |
 | QR/JSON sharing | V payload, image/camera P | production UTF-8/Base64 envelope 왕복, 선택 timetable replace/time merge 및 partial failure. image encoder/decoder는 미검증 | payload M3 COMPLETE; camera/decoder 수리 SKIP |
@@ -67,13 +71,13 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 
 | Feature | Status | 현재 증거 / 부족한 증거 | .NET 전 처리 |
 | --- | --- | --- | --- |
-| Tray | P | 왼쪽 클릭 hide/show, 표시·version·종료 메뉴, manager에서 action 연결 | MUST M4 |
-| Autostart | P | 현재 사용자 Startup의 SchoolTimetableWidget.lnk, WScript.Shell, 시작 시 sync. 테스트는 JSON 옵션만 | MUST M4에서 on/off/재로그인 확인 |
+| Tray | V, M4 범위 | Default desktop native 우클릭 menu/왼쪽 hide/보기 action/종료 및 observer 로그 | M4 COMPLETE; 설정은 Widget 메뉴 |
+| Autostart | P, source-confirmed | Startup .lnk, WScript.Shell, 존재 detection/target/실패/sync 기록; current .lnk 전후 없음 | M4 문서화 완료, mutation/재로그인 document-only |
 | Single instance | O, 현재 없음 | entry에 mutex/IPC guard 없음. process cleanup은 단일 실행 기능이 아님 | SHOULD document, .NET 새 설계 |
-| Process/application manager | P | 자기 child terminate→kill, signal/atexit, 중복 cleanup 방지. 테스트는 process stub | 정상 종료 M4, aggressive killer 이식 SKIP |
-| Startup | P | logging/data dir, update check, QApplication, settings/notification/widget/tray, frozen CSV copy | MUST M4, fresh/existing profile |
-| Shutdown persistence | V | Widget 확정→manager flush, 15ms 종료·move 직후 기존 Windows 결과 | native tray/context 종료 전체는 M4 |
-| Notification | P / K3 | M1에서 예고 callback 누락 확인. native toast/backend 전체는 미검증 | M1 CHARACTERIZED; M4 표시 확인 |
+| Process/application manager | V 정상 종료, child 전체 P | M4 real main cleanup true/exit0/PID 종료. 자기 child terminate→kill 및 signals는 source 확인 | 정상 종료 COMPLETE, aggressive killer 이식 SKIP |
+| Startup | V isolated main, frozen P | fresh offscreen main + synthetic TEMP native main 및 persisted TEMP 재시작; 외부3경계 차단 | M4 COMPLETE; copied profile 명령 제공, full physical-PC install 미실행 |
+| Shutdown persistence | V, 범위 제한 | 기존 flush 계약 + M4 offscreen QAction/close와 native tray exit/restart JSON | 강제 종료/모든 child matrix는 document-only |
+| Notification | P / K3 | M1 예고 callback 누락, M4 manager/load/toggle/backend 경계 확인; 실제 delivery 차단 | document-only, native toast 미검증 |
 | Version detection | V, 숫자 비교만 / K1 | 1.0.0, regex 숫자 list 비교 5case. semver 전체는 아님 | SHOULD document |
 | GitHub release lookup | P | latest API, 5초 timeout, 첫 소문자 .exe suffix 선택, 실패는 False | SHOULD document |
 | Download | P | 동기 stream GET, 30초 timeout, 8192byte chunk, content-length 있을 때 progress | SHOULD document |
@@ -82,7 +86,7 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 | Asset naming | P, 불일치 확인 | README main.exe / spec main.exe·TimetableWidget.exe / release SchoolTimetableWidget.exe | SHOULD document |
 | Version stamping | P, 미확립 | Python 1.0.0 고정, spec에 version resource 없음, tag 연동 없음 | SKIP legacy pipeline |
 | Workflow | O, HEAD에 없음 | tag의 v2 workflow는 다른 entry/output, artifact upload만 존재 | .NET에서 구축 |
-| Reproducibility | P / UNKNOWN | tracked build/dist/venv는 있지만 clean build 명세·의존 lock·release hash 재현 증거 없음 | M4에서 source 실행 재현성 확보 |
+| Reproducibility | V 절차·현 환경 실행, clean build UNKNOWN | M4 ASCII venv/버전/명령/TEMP/main/native smoke; dependency lock·release hash 재현 없음 | reference 절차 확보, 다른 물리 PC install 성공을 주장하지 않음 |
 | Exact release DPI implementation | R | symbol evidence 있음, UX는 재구성 완료. 원본 코드 일치는 UNKNOWN | SHOULD document, exact source 추적 SKIP |
 
 ## Verified areas
@@ -93,7 +97,9 @@ Git 확인: safe point `d9756a6`부터의 5 recovery commits는 상태 문서의
 
 ## Partially verified areas
 
-M1/M2는 전용 계약·명세·native 기록, M3는 source/TEMP Qt/subprocess 계약과 명세로 완료했다. native tray/flags/autostart, 전체 main startup은 M4다. 실제 QR image/camera decode 및 file picker/confirmation 외관은 M3 VERIFIED에 포함하지 않으며 document-only/skip 경계를 유지한다. 이미 완료된 Windows geometry 검증을 무조건 반복하지 않고 아직 관찰하지 않은 입력과 결과를 기록한다.
+M1/M2는 전용 계약·명세·native 기록, M3는 source/TEMP Qt/subprocess 계약과 명세로 완료했다.
+M4는 isolated main/native tray/종료/restart와 runbook으로 완료했다. 실제 autostart/notification/frozen/겹침 전체,
+QR image/camera decode 및 picker 외관은 VERIFIED에 포함하지 않으며 아래 document-only/skip 경계를 유지한다.
 
 ## Known broken areas
 
@@ -103,9 +109,9 @@ M1/M2는 전용 계약·명세·native 기록, M3는 source/TEMP Qt/subprocess �
 | --- | --- | --- |
 | K1 | running 1.0.0 / release v1.0.1 비교가 True | 인계된 version mismatch, updater B |
 | K2 | download 성공 분기가 TEMP Popen이며 원래 path를 교체하지 않음 | VERIFIED source absence, self-update 완료로 부르지 않음 |
-| K3 | Widget.update_current_period가 prev_period 변경 시에만 notification check. 기본 시각 09:55는 current_period=None이므로 10:00의 2교시 예고를 평가하지 못함 | VERIFIED M1 callback fixture: 09:55 호출 없음. 실제 toast는 M4, .NET REDESIGN |
+| K3 | Widget.update_current_period가 prev_period 변경 시에만 notification check. 기본 시각 09:55는 current_period=None이므로 10:00의 2교시 예고를 평가하지 못함 | VERIFIED M1 callback fixture: 09:55 호출 없음. 실제 toast document-only, .NET REDESIGN |
 | K4 | ThemeSelector.select_theme→change_theme가 style JSON 저장, SettingsDialog.reject는 초기 style의 memory만 복원 | VERIFIED M2: theme→Cancel→restart에서 저장 theme 복원; Apply18→Preview24→Cancel visual10/file18. [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), REDESIGN |
-| K5 | reset_widget_position은 manager.position=(100,100), Apply는 저장하지만 widget.move를 호출하지 않음 | VERIFIED M2: target100,100, 즉시 move 없음, Cancel target 유지, 같은 크기 Apply persistence. 다중 모니터 M4; REDESIGN |
+| K5 | reset_widget_position은 manager.position=(100,100), Apply는 저장하지만 widget.move를 호출하지 않음 | VERIFIED M2: target100,100, 즉시 move 없음, Cancel target 유지, 같은 크기 Apply persistence. monitor 제거는 document-only; REDESIGN |
 | K6 | exceptions.handle_exception의 QApplication 없는 경로가 logger.error에 지원하지 않는 file=sys.stderr 인자를 전달하고 except에서도 반복 | INFERRED: 해당 예외 보고 경로가 TypeError로 실패할 수 있음. document-only, 정상 reference 시작을 막을 때만 최소 수리 |
 
 M1에서 확인한 KNOWN QUIRKS: `A,A,B` open/save→`A,A,A`, 수동 merge의 다음 셀 overwrite, 6~7 동일 span=3/1~7 동일 span=8 및 split AttributeError, 빈 셀 뒤 병합 누락. 전용 legacy tests와 명세 L1–L5에 고정했다. stale-date 강조, invalid time matching, QLabel AutoText도 명세에 기록하며 .NET 필수 재현 대상이 아니다.
@@ -125,9 +131,29 @@ M3는 [명세](DATA-LIFECYCLE-SPEC.md)와 [전용 contracts](../src/utils/test_d
 | M1 Core content / clock | COMPLETE / CHARACTERIZED | [명세](TIMETABLE-BEHAVIOR-SPEC.md), 전용 contracts, native IME/X/typing/render 기록 | 완료; legacy quirk는 REDESIGN |
 | M2 Settings / appearance | COMPLETE / CHARACTERIZED | [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), [전용 contracts](../src/utils/test_settings_behavior_contracts.py), native X/rollback/restart/render 기록 | 완료; quirks는 REDESIGN |
 | M3 Data lifecycle | COMPLETE / CHARACTERIZED | [명세](DATA-LIFECYCLE-SPEC.md), [22 contracts](../src/utils/test_data_lifecycle_contracts.py), source/TEMP Qt 및 restart evidence. full profile·pending·partial/failure·sharing payload | 완료; quirks REDESIGN, native 과장 없음 |
-| M4 Windows reference runbook | 다른 PC에서 비교 실행하고 native 동작을 오인하지 않음 | Python/Qt/OS/dependency 버전·source 실행법. fresh/existing profile, flags/겹침/taskbar, lock/drag, tray toggle/show/exit·context exit, autostart on/off/재로그인, notification 표시, 두 번째 실행, 사라진 monitor에서 startup. 기존 DPI 결과 재사용 | 0.5–1일 및 재로그인, native smoke/runbook |
+| M4 Windows reference runbook | COMPLETE / CHARACTERIZED | [Runbook](WINDOWS-REFERENCE-RUNBOOK.md): 환경/명령/fresh·copied TEMP, isolated main, native tray/설정/resize/exit/restart, 외부경계·미검증 disposition | 완료; 원래 flags 유지, 기존 DPI evidence 재사용 |
 
-M1/M2/M3는 완료했고 남은 MUST gate는 M4 하나다. 이미 알려진 버그는 재현 예시와 이식 시 채택/수정 방침을 기록하면 닫을 수 있다. 정상 참조 실행이나 데이터 비교를 막는 것만 별도 최소 수리한다. Python updater나 notification을 전면 재작성할 필요는 없다.
+M1/M2/M3/M4 완료, 남은 MUST gate **0**. 이미 알려진 버그는 재현 예시와 이식 방침을 기록하여 닫는다.
+정상 참조 실행이나 데이터 비교를 막는 새로운 결함은 관찰되지 않았다. Python updater나 notification 수리는 요구하지 않는다.
+
+### M4 scope disposition (2026-09-08)
+
+초기 audit의 M4 후보 목록에는 autostart on/off/재로그인, toast 표시, lock/겹침/taskbar 전체,
+두 번째 실행, monitor 제거가 있었다. 이번 명시적 요청은 안전한 reference runbook과 최소 native smoke를 우선하고
+autostart는 read-only/source 확인, notification은 integration boundary, single-instance/DPI 추가 실행은 가능할 때로 한정했다.
+따라서 아래 항목을 조용히 VERIFIED로 바꾸지 않고 **document-only/skip 비차단**으로 disposition한다.
+
+| 미실행 범위 | 최종 근거 / 처리 |
+| --- | --- |
+| OS autostart mutation/재로그인 | Startup .lnk semantics·target·failure 소스 확인, 전후 부재 확인; 기존 상태 보호, document-only |
+| 실제 notification delivery | backend/load/toggle/callback quirk 기록; no-op 경계로 차단, .NET REDESIGN |
+| Native second-process A/B | entry guard 없음 source-confirmed; concurrent 원본 writer를 만들 필요 없음, .NET 설계 |
+| Lock/겹침/taskbar 전체 | 원래 flags·lock 분기 source-confirmed; native move/resize/설정/표시는 확인, 나머지 document-only |
+| 사라진 monitor / 새 DPI 왕복 | fallback/clamp 소스 및 기존96↔120 Windows evidence; 이번96DPI만 실행, 추가 matrix document-only |
+| Unmodified main / frozen EXE | updater/autostart/notification 외부효과 있어 격리 main만 실행; release 동일성 UNKNOWN, build B |
+| Fresh physical PC install | clone/의존 설치/import/smoke/TEMP 명령 제공 및 현 venv 실행 확인; 다른 PC 실제 성공은 미주장 |
+
+기존 M1/M2/M3의 모든 quirks·typing/QR/picker/강제 종료 한계도 해당 명세의 REDESIGN/document-only/skip을 유지한다.
 
 ## Document only
 
@@ -161,7 +187,9 @@ M1/M2/M3는 완료했고 남은 MUST gate는 M4 하나다. 이미 알려진 버�
 4. 시작 전에 Yes/No를 묻는다. Yes면 TEMP의 `school_timetable_update_{tag}.exe`에 동기 download한다. 30초 timeout, content-length가 있으면 progress 표시. 취소, hash/서명 검사, partial-file 정리 코드가 없다.
 5. 성공하면 `subprocess.Popen([dest])` 후 quit/return한다. 원래 EXE의 종료를 기다리는 교체 helper, install path 교체, shortcut 갱신, rollback이 없다. Windows self-replacement의 성공 증거가 없다. TEMP EXE 실행 지속·반복 prompt는 INFERRED이며 이번에 download하지 않았다.
 
-Reference 사용에서 update 승낙을 검증의 전제로 삼지 않는다. 네트워크가 통제된 환경이나 No 선택을 runbook에 기록한다. A는 reference 목적에 비해 과도하다. C(notification-only)는 다른 이력 5ed5f28에 선례가 있지만 이번 baseline을 바꿀 필요는 없다. 향후 legacy 배포가 요구되면 별도 C 검토가 가능하다.
+Reference에서는 updater 자체를 실행하지 않는다. Runbook은 check를 process-local False로 대체해 network/prompt/download를 피한다.
+No 선택만으로 startup network를 차단한 것으로 보지 않는다. A는 reference 목적에 비해 과도하다.
+C(notification-only)는 다른 이력5ed5f28에 선례가 있지만 baseline을 바꿀 필요는 없다. 향후 legacy 배포는 별도 범위다.
 
 ## Build/release recommendation
 
@@ -186,16 +214,22 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 - [x] M1: content/clock 전용 contract·명세·native 표시 기록 완료. 마지막 span/예고는 quirk로 확정, 비차단 typing unknown 명시.
 - [x] M2 COMPLETE / CHARACTERIZED: 5-state 명세·전용 contracts·native 관찰 기록, K4/K5 및 signal/geometry quirks REDESIGN. 원본 이미지는 TEMP 기록으로 한정.
 - [x] M3 COMPLETE / CHARACTERIZED: 5 JSON·backup/import·pending·partial/failure·restart를 명세와 22 contracts로 고정. native file picker/QR scan/full main startup은 완료 주장하지 않음.
-- [ ] M4: native Windows smoke와 다른 환경에서도 쓸 수 있는 source 실행 runbook 기록.
-- [ ] 각 미검증 항목을 verified 또는 명시적 document-only/skip으로 옮기고 참조 비교를 막는 결함 해소.
-- [ ] 후속 구현 변경이 있으면 대상 contract와 full suite 통과, DPI/layout 변경이면 Windows 결과도 갱신.
-- [ ] updater B / build B 범위를 리뷰로 채택하고 Golden Reference 종료 commit 명시.
+- [x] M4: isolated main/Default desktop native tray smoke·정상 종료·restart와 다른 환경에서 사용할 source 실행 runbook 기록.
+- [x] 각 미검증 항목을 위 표 및 명세의 document-only/skip으로 명시. 정상 reference 비교를 막는 결함 관찰 없음.
+- [x] 후속 구현 변경 시 재검증 조건 확인: M4는 production/tests 무변경이므로 해당 없음. 기존 full baseline226 passed ×2 기록, 전체 재실행 없음.
+- [x] updater B / build B 채택. Working branch/source HEAD 명시, Golden Reference behavior 범위 확정.
+- [x] 기존 DPI/M1/M2 native 및 M4 native 증거, source-only/Qt evidence 한계, known limitations disposition 기록.
+
+**행정적 후속:** 원래 마지막 criterion의 “종료 commit 명시”는 source baseline 고정과 최종 문서 commit을 구분한다.
+Source HEAD는 `07eaa43de6f55a0d4ba21fb74482dbf539b3636d`로 고정했다. 이번 요청은 commit/push/PR 금지이므로
+M4 종료 문서 commit은 **아직 없음 / 리뷰 후 대기**다. 이를 수행했다고 표시하지 않으며 기능 회수 MUST 수에는 포함하지 않는다.
+판정은 현재 docs diff를 포함한 **COMPLETE AS GOLDEN REFERENCE**이며 public release candidate가 아니다.
 
 원래 EXE의 완전 재현, updater 성공, 공개 release, 모든 native warning 제거는 종료 조건이 아니다.
 
 ## Recommended next task
 
-**다음 작업은 M4 Windows reference runbook이다.** source 실행 환경과 격리 profile 절차를 고정하고, 기존 DPI/native evidence를 재사용하며 아직 필요한 Windows smoke 범위만 검증한다.
+**다음 작업은 M4 문서 4개의 diff를 검토하는 것이다.** commit/push/PR은 이번에 수행하지 않는다.
 
 ## M1 documentation and contract validation
 
@@ -212,3 +246,11 @@ build/dist와 Linux Python 3.12 계열 .venv가 tracked여도 release EXE의 Pyt
 Production/기존 7 backup contracts는 그대로 유지하며 핵심 profile/UI/failure 관계를 추가했다.
 실행 결과와 재현 환경은 [상태 문서](LEGACY-RECOVERY-STATUS.md)의 M3 기록을 따른다.
 M3 COMPLETE / CHARACTERIZED, 남은 MUST는 M4 하나다. native file picker/QR scan/full main startup 완료를 뜻하지 않는다.
+
+## M4 documentation and final validation
+
+M3 절의 잔여 milestone 표현은 당시 기록이다. 최신 상태는 M4 COMPLETE / CHARACTERIZED, 남은 MUST0이다.
+새 runbook과 기존 docs3개만 변경했다. 정확한 native 관찰/Qt 계측 및 전후 원본 보호 결과는
+[M4 상태 기록](LEGACY-RECOVERY-STATUS.md#m4-completion-and-final-recovery-verdict)을 따른다.
+test/helper 파일 추가나 production/dependency/build 변경은 없다. 전체 pytest를 다시 실행하지 않았다.
+Golden Reference = behavior reference, NOT implementation template; MATCH / COMPATIBLE / REDESIGN으로 이식한다.

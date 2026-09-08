@@ -5,7 +5,7 @@ M2 기준 HEAD: `da21ece624985dfa2b60be9cfc0c2043c440e242` (production 무변경
 M1 후속 기준 production HEAD: `bb30e3c9983c9faf8acf7a76e03dc79662e6818b` (production 무변경).
 이 문서는 [상태](LEGACY-RECOVERY-STATUS.md)나 [감사 판정](RECOVERY-COMPLETION-AUDIT.md)을 반복하는 대신,
 기능의 호출 지점·데이터 소유권·이식 단위를 연결한다. .NET target은 **RECOMMENDED 방향**이며 확정 아키텍처가 아니다.
-M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 완료했고, M2도 [설정 명세](SETTINGS-BEHAVIOR-SPEC.md)와 전용 contracts/native 기록으로 COMPLETE / CHARACTERIZED이며, M3도 [데이터 수명주기 명세](DATA-LIFECYCLE-SPEC.md)와 [전용 contracts](../src/utils/test_data_lifecycle_contracts.py)로 COMPLETE / CHARACTERIZED다. 남은 MUST는 M4 하나다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
+M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md), M2는 [설정 명세](SETTINGS-BEHAVIOR-SPEC.md), M3는 [데이터 수명주기 명세](DATA-LIFECYCLE-SPEC.md)와 전용 contracts로 COMPLETE / CHARACTERIZED다. M4도 [Windows Reference Runbook](WINDOWS-REFERENCE-RUNBOOK.md)의 source/Qt/native 범위에서 COMPLETE / CHARACTERIZED다. **남은 MUST 0, COMPLETE AS GOLDEN REFERENCE**. M4 시작 HEAD는 `07eaa43de6f55a0d4ba21fb74482dbf539b3636d`이며 문서만 미커밋 상태로 추가한다. 아래 파일 링크와 함수명은 기준 소스에서 확인했다.
 
 ## Feature to source / data mapping
 
@@ -17,13 +17,13 @@ M1은 [시간표 명세](TIMETABLE-BEHAVIOR-SPEC.md)와 전용 contracts/native 
 | 교시 시각 편집 | [TimeRangeDialog.save_time_ranges](../src/gui/dialogs/time_dialog.py) | time_settings.json | M1 COMPLETE; backup/import M3 COMPLETE | Features/Settings |
 | Font·colors·theme·opacity | [SettingsDialog](../src/gui/dialogs/settings_dialog.py), [ThemeSelector](../src/gui/components/theme_selector.py), [ColorButton](../src/gui/components/color_button.py), [styling](../src/utils/styling.py) | style_settings.json, Config.THEMES / DEFAULT_STYLES | M2 COMPLETE / CHARACTERIZED; Preview/Apply/Cancel/theme quirks는 설정 명세 참조 | Features/Settings |
 | Explicit size | SettingsDialog.apply_settings → [Widget.apply_user_requested_size](../src/gui/widget.py) | widget_settings.size, runtime design preferred | V: HFW actual, hide/show, DPI; M2 constrained 재오픈/control 불일치 기록 | Features/Settings |
-| Window geometry·drag·lock | Widget DragResizeMixin / apply_saved_position / save_widget_position | position, size, is_position_locked, screen_info | 저장/DPI V, lock/native M4 | Platform/Windows/Windowing |
+| Window geometry·drag·lock | Widget DragResizeMixin / apply_saved_position / save_widget_position | position, size, is_position_locked, screen_info | 저장/DPI V, M4 native resize/위치 복원; lock/겹침 전체는 source/document-only | Platform/Windows/Windowing |
 | DPI·minimum·HFW | Widget.apply_minimum_cell_sizes / _apply_deferred_dpi_correction, styling.calculate_minimum_cell_size | runtime 96-DPI QSizeF, 현재 screen logical DPI | 자동+Windows V | Platform/Windows/Windowing |
-| Tray·visibility·종료 | [TrayIcon](../src/tray_icon.py), [ApplicationManager.safe_exit](../src/main.py), Widget.closeEvent | visible state는 JSON에 저장 안 함 | geometry hide/show V, 입력 M4 | Platform/Windows/Tray |
-| Autostart | [auto_start](../src/utils/auto_start.py), ApplicationManager._sync_auto_start_setting | widget_settings.auto_start_enabled + Startup .lnk | JSON V, OS 동작 M4 | Platform/Windows/Startup |
-| 시작·정리 | ApplicationManager.run / cleanup_resources | data/log directory, singleton managers | flush 순서 V, 전체 lifecycle M4 | App / Platform/Windows/Lifecycle |
-| Single instance | 현재 entry에는 guard 없음 | 공유 data directory만 있음 | 부재 소스 확인, 두 번째 실행 M4 | Platform/Windows/SingleInstance, 신설 여부 결정 |
-| 교시 알림·예고 | [NotificationManager](../src/notifications/notification_manager.py) 및 Widget.update_current_period | notification_settings.json, in-memory last_notified_* | M1 CHARACTERIZED 예고 callback; native 표시 M4 | Features/Notifications / Platform/Windows/Notifications |
+| Tray·visibility·종료 | [TrayIcon](../src/tray_icon.py), [ApplicationManager.safe_exit](../src/main.py), Widget.closeEvent | visible state는 JSON에 저장 안 함 | M4 native menu/toggle/show/exit V; Settings는 Widget 메뉴 | Platform/Windows/Tray |
+| Autostart | [auto_start](../src/utils/auto_start.py), ApplicationManager._sync_auto_start_setting | widget_settings.auto_start_enabled + Startup .lnk | JSON V; M4 source-confirmed semantics, read-only .lnk 부재; 실제 mutation/재로그인 document-only | Platform/Windows/Startup |
+| 시작·정리 | ApplicationManager.run / cleanup_resources | data/log directory, singleton managers | M4 isolated full main/native tray exit0/restart; 외부3경계 차단, unmodified main/frozen 아님 | App / Platform/Windows/Lifecycle |
+| Single instance | 현재 entry에는 guard 없음 | 공유 data directory만 있음 | M4 source-confirmed 부재, native A/B 생략; killer와 구분 | Platform/Windows/SingleInstance, 신설 여부 결정 |
+| 교시 알림·예고 | [NotificationManager](../src/notifications/notification_manager.py) 및 Widget.update_current_period | notification_settings.json, in-memory last_notified_* | M1 예고 callback + M4 load/toggle/backend 경계 기록; 실제 delivery document-only | Features/Notifications / Platform/Windows/Notifications |
 | JSON 위치·로드·저장 | [paths](../src/utils/paths.py), [SettingsManager](../src/utils/settings_manager.py) | 아래 5파일, appdirs, 환경변수 | widget V; timetable/time M1 완료; 전체 lifecycle M3 COMPLETE | Infrastructure/Persistence |
 | Backup·restore·delete | [BackupRestoreDialog](../src/gui/dialogs/backup_dialog.py), SettingsManager.create_backup / restore_backup | backups/name/5파일 + description.txt | M3 COMPLETE: full 왕복/partial/failure/runtime-restart 경계 | Infrastructure/Persistence |
 | QR 공유·PNG | [QRShareDialog.generate_qr_code](../src/gui/dialogs/qr_share_dialog.py) | 아래 공유 envelope, Base64 JSON | payload M3 COMPLETE, 실제 QR image 생성/scan 미검증 | Features/Sharing |
@@ -77,4 +77,5 @@ image decode에는 pyzbar/Pillow가 필요하다. 데이터 형식의 이식과 
 - 스타일 Cancel·테마 즉시 저장·signal/opacity·위치 reset은 [M2 명세](SETTINGS-BEHAVIOR-SPEC.md)의 REDESIGN 분류를 따른다. 알림 예고는 감사 문서 K3을 따른다. 버그도 그대로 이식하라는 뜻이 아니다.
 - M3에서 backup restore의 file/manager A, Widget geometry·notification runtime B, restart A를 고정했다. Disk file replace와 runtime partial merge는 다르다. manager pending 보호를 Widget pre-manager pending까지 일반화하지 않는다. 모두 [데이터 수명주기 명세](DATA-LIFECYCLE-SPEC.md)를 따른다.
 - Process killer는 단일 실행 기능이 아니며 aggressive 종료 도구를 .NET 사양으로 옮기지 않는다.
-- Source 실행법·의존 버전·fresh profile 재현은 M4에서 고정한다. 위 target 경로만으로 새 .NET 구조를 구현하지 않는다.
+- Source 실행법·의존 버전·fresh/copied TEMP 절차·외부 효과 차단은 [M4 runbook](WINDOWS-REFERENCE-RUNBOOK.md)에 고정했다. 다른 물리 PC의 install 성공이나 frozen 동일성을 주장하지 않는다.
+- **Golden Reference = behavior reference, NOT implementation template.** reconstructed and characterized reference이며 exact deployed v1.0.1 source recovered 선언이나 current public release candidate가 아니다. 위 target 경로만으로 새 .NET 구조를 구현하지 않는다. MATCH / COMPATIBLE / REDESIGN을 적용한다.

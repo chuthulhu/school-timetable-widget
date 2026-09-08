@@ -8,8 +8,10 @@ reliable reference implementation을 재구성하는 브랜치다. 실제 v1.0.1
 byte-for-byte 복원한 브랜치가 아니다. .NET 재작성 시 기능·디자인·설정·Windows
 동작을 비교하는 Golden Reference가 목적이며, Python 제품의 전면 개선이 목적은 아니다.
 
-현재 M1/M2에 이어 M3도 **COMPLETE / CHARACTERIZED**다. 남은 MUST는 **M4 Windows reference runbook** 하나다.
-[데이터 수명주기 명세](DATA-LIFECYCLE-SPEC.md)와 아래 M3 검증 기록을 참조한다.
+현재 M1/M2/M3/M4 **COMPLETE / CHARACTERIZED**, 남은 MUST **0**.
+Legacy recovery는 **COMPLETE AS GOLDEN REFERENCE**다.
+이는 **reconstructed and characterized Golden Reference**이며 exact deployed v1.0.1 source recovered 선언이 아니다.
+[Windows Reference Runbook](WINDOWS-REFERENCE-RUNBOOK.md)과 아래 M4 기록이 최신 종료 판정이다.
 
 이 문서는 검증된 복구 상태를 고정한다. 전체 기능의 잔여 검증과 종료 판정은
 [Recovery Completion Audit](RECOVERY-COMPLETION-AUDIT.md), 데이터와 소스의 이식 대응은
@@ -211,7 +213,7 @@ M1 pollution이 아니라 강조 border 1→2px에 따른 HFW +2px였다. 해당
 
 M1 완료는 알려진 결함을 수리했다는 뜻이 아니다. .NET의 destructive merge, validation,
 scheduler, AutoText, 저장 실패 UX는 REDESIGN 대상이다. M1 당시 남은 MUST 묶음은 M2 Settings,
-M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2/M3 완료 후 M4만 남는다. 전체 recovery 종료와 구분한다.
+M3 Data lifecycle, M4 Windows reference runbook이었다. 당시 결과이며 현재 종료 판정은 아래 M4 기록을 따른다.
 
 ## Known limitations
 
@@ -224,7 +226,7 @@ M3 Data lifecycle, M4 Windows reference runbook이었다. 현재는 아래 M2/M3
 - **Native geometry warnings.** 사용자 drag/native monitor transition 중 일부
   `QWindowsWindow::setGeometry` warning은 있을 수 있다. 검증된 deferred correction loop는 없고,
   deferred normalization warning 0과 전체 native warning 0을 혼동하지 않는다.
-- **범위 한계.** M1 시간 계산/내용 편집은 위 범위에서 완료했다. M2 appearance는 아래 범위에서 완료했다. backup/import lifecycle은 M3에서 완료했다. tray/autostart/알림 전달, update/build는 감사 문서에서 별도로 판정한다.
+- **범위 한계.** M1 시간 계산/내용 편집, M2 appearance, M3 backup/import, M4 isolated main/tray/정상 종료를 명시 범위에서 완료했다. 실제 autostart/알림 전달, update/build 등은 runbook과 감사 문서의 document-only/skip 판정을 따른다.
 
 ## Golden Reference rules
 
@@ -330,3 +332,48 @@ characterization 기준과 동일함을 확인했다. M3 **commit-ready**이며 
 
 이번 변경은 docs 4개와 신규 M3 test module 하나다. Production 및 기존 tests는 무변경이며
 commit/push/PR은 실행하지 않았다. M3 완료는 전체 Golden Reference 종료나 legacy bug 수리를 의미하지 않는다.
+
+## M4 completion and final recovery verdict
+
+2026-09-08, `recovery-v1-release` / `07eaa43de6f55a0d4ba21fb74482dbf539b3636d`,
+clean tree에서 시작했다. [Windows Reference Runbook](WINDOWS-REFERENCE-RUNBOOK.md)에
+source 실행 환경·dependency 선언의 불완전성·fresh/copied TEMP 절차·safe launcher·10분 smoke를 고정했다.
+**M4 COMPLETE / CHARACTERIZED; remaining MUST 0; COMPLETE AS GOLDEN REFERENCE.**
+
+현재 source baseline은 위 HEAD이고, M4는 그 위의 미커밋 docs-only 변경이다. 종료 문서 commit hash는 아직 없다.
+기존 reference baseline 표 및 M1/M2/M3 수치는 각 당시 기록이다. M1/M2/M3 명세의 남은 milestone 표현도
+당시 범위 기록으로 보존하며 최신 종료 판정은 이 절과 감사 문서를 따른다.
+
+환경 재확인: Windows 11 build26100 AMD64 / Python3.12.14 / PyQt5 5.15.11 / Qt5.15.2,
+ASCII venv `C:\CodexVenvs\school-timetable-widget-py312`. PyQt5-sip12.19.0,
+pytest9.1.1, psutil7.2.2, appdirs1.4.4, requests2.34.2. Qt plugin override 없이 startup 성공.
+README는 unpinned이며 requests/QR dependencies가 빠져 있다. root dependency lock/workflow 없음.
+다른 물리 PC의 fresh install을 수행한 것은 아니며 재현 명령과 현 환경의 실행 증거를 제공한다.
+
+| M4 verification | Result / boundary |
+| --- | --- |
+| Offscreen isolated main, fresh TEMP | tray QAction 종료와 Widget.close 별도 프로세스; Widget 지연 size630×580 → 최종 JSON630×580, cleanup true, exit0 |
+| 초기 native 시도 | sandbox 별도 desktop에서 Qt visible=true지만 사용자에게 안 보임. 사용자 visible 증거에서 제외, 정상 종료0 |
+| Default desktop native main | 원래 Tool/Frameless/Bottom flags 유지, updater/autostart/notification delivery만 process-local 차단 |
+| 사용자 tray 입력 | 우클릭 menu, 왼쪽 숨김, 보기 action 복귀, 종료로 widget/icon 소실; observer event와 일치 |
+| 설정 / geometry | Widget 메뉴 설정 열기→취소, resize 사용자 확인, move/resize 최종 geometry 계측 |
+| 종료 / 재실행 | tray exit0·cleanup true·PID 종료, JSON (861,220,440,375), 새 main의 같은 geometry. 위치 사용자 확인; 크기 육안은 불확실, Qt/JSON 계측으로만 확인 |
+| DPI | 이번 Default run96 DPI; 새100↔125 왕복 미실행, 기존 Windows 왕복 증거 재사용 |
+| 보호 확인 | 원본5 JSON SHA-256/mtime 전후 동일, Startup .lnk 전후 없음, 소유 native 진단3 process 모두 exit0 |
+
+Native 원본 로그/observer/JSON은 TEMP 자료다. runbook의 절차·관찰 표가 영구 기록이며 원본 capture 보관을 주장하지 않는다.
+computer-use는 Default desktop의 Tool 창도 반환하지 않았다. 이는 discovery 한계이며 capture/input 실패를 직접 입증하지 않는다.
+사용자 직접 입력을 자동 OS 입력 검사로 부르지 않는다. 별도 desktop 문제를 Qt.Tool discovery 문제와 구분했다.
+
+Autostart는 Startup shortcut 존재 detection/생성/삭제·Python/frozen target·실패 의미를 source-confirmed로 고정했다.
+기존 shortcut을 바꾸거나 재로그인하지 않았다. Notification은 manager/load/toggle/backend 경계만 기록, 실제 toast 미실행.
+single-instance guard 없음은 source-confirmed이며 native A/B 동시 실행은 생략했다. Lock/overlap/taskbar 전체,
+monitor 제거 startup 등도 document-only; 알려진 동작은 .NET MATCH/COMPATIBLE/REDESIGN에 따라 사용한다.
+이 disposition은 이번 M4의 명시적 범위를 따르며 미실행 기능을 VERIFIED로 승격하지 않는다.
+
+Updater B / build B 채택: reference에서 updater 실행 금지, legacy release pipeline 수리·재배포는 gate 밖,
+.NET에서 새로 구축한다. Golden Reference는 behavior reference이며 implementation template이나 public release candidate가 아니다.
+
+Production/tests/dependency/build 변경 없음. test/helper 파일도 추가하지 않았다. TEMP inline characterization만 수행했다.
+전체 pytest는 docs-only라 재실행하지 않았으며 **226 passed × 2는 M3의 기존 baseline**으로 기록한다.
+허용된 문서4개만 변경, commit/push/PR은 실행하지 않는다. 최종 diff 검토 후 문서 commit은 별도 후속 단계다.
